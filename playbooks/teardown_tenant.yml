@@ -1,6 +1,6 @@
 ---
 # teardown_tenant.yml
-# Delete all vincent-* OpenStack tenant resources: servers, volumes, ports.
+# Delete all demo OpenStack tenant resources: servers, volumes, ports.
 # Does NOT touch networks, security groups, keypairs, images, or backup targets.
 # Safe to run against a partially-built environment — missing resources are skipped.
 #
@@ -13,7 +13,7 @@
 #   ansible-playbook playbooks/teardown_tenant.yml --tags sel
 #   ansible-playbook playbooks/teardown_tenant.yml --tags db
 
-- name: Teardown vincent-* tenant resources
+- name: "Teardown {{ demo_prefix }}-* tenant resources"
   hosts: localhost
   connection: local
   gather_facts: false
@@ -33,7 +33,7 @@
     - name: Delete OCR server
       openstack.cloud.server:
         cloud: "{{ os_cloud }}"
-        name: vincent-ocr-vm
+        name: "{{ demo_prefix }}-ocr-vm"
         state: absent
         wait: true
       failed_when: false
@@ -46,8 +46,8 @@
         state: absent
         wait: true
       loop:
-        - vincent-ir-vm1
-        - vincent-ir-vm2
+        - "{{ demo_prefix }}-ir-vm1"
+        - "{{ demo_prefix }}-ir-vm2"
       failed_when: false
       tags: ir
 
@@ -58,8 +58,8 @@
         state: absent
         wait: true
       loop:
-        - vincent-sel-vm1
-        - vincent-sel-vm2
+        - "{{ demo_prefix }}-sel-vm1"
+        - "{{ demo_prefix }}-sel-vm2"
       failed_when: false
       tags: sel
 
@@ -70,8 +70,8 @@
         state: absent
         wait: true
       loop:
-        - vincent-db1-vm
-        - vincent-db2-vm
+        - "{{ demo_prefix }}-db1-vm"
+        - "{{ demo_prefix }}-db2-vm"
       failed_when: false
       tags: db
 
@@ -81,7 +81,7 @@
     - name: Delete OCR data volume
       openstack.cloud.volume:
         cloud: "{{ os_cloud }}"
-        name: vincent-ocr-datavol
+        name: "{{ demo_prefix }}-ocr-datavol"
         state: absent
         wait: true
       failed_when: false
@@ -90,7 +90,7 @@
     - name: Delete IR data volume
       openstack.cloud.volume:
         cloud: "{{ os_cloud }}"
-        name: vincent-ir-vm1-datavol
+        name: "{{ demo_prefix }}-ir-vm1-datavol"
         state: absent
         wait: true
       failed_when: false
@@ -99,7 +99,7 @@
     - name: Delete DB2 data volume
       openstack.cloud.volume:
         cloud: "{{ os_cloud }}"
-        name: vincent-db2-datavol
+        name: "{{ demo_prefix }}-db2-datavol"
         state: absent
         wait: true
       failed_when: false
@@ -110,7 +110,7 @@
     - name: Delete OCR boot volume
       openstack.cloud.volume:
         cloud: "{{ os_cloud }}"
-        name: vincent-ocr-bootvol
+        name: "{{ demo_prefix }}-ocr-bootvol"
         state: absent
         wait: true
       failed_when: false
@@ -123,8 +123,8 @@
         state: absent
         wait: true
       loop:
-        - vincent-ir-vm1-bootvol
-        - vincent-ir-vm2-bootvol
+        - "{{ demo_prefix }}-ir-vm1-bootvol"
+        - "{{ demo_prefix }}-ir-vm2-bootvol"
       failed_when: false
       tags: ir
 
@@ -135,8 +135,8 @@
         state: absent
         wait: true
       loop:
-        - vincent-sel-vm1-bootvol
-        - vincent-sel-vm2-bootvol
+        - "{{ demo_prefix }}-sel-vm1-bootvol"
+        - "{{ demo_prefix }}-sel-vm2-bootvol"
       failed_when: false
       tags: sel
 
@@ -147,8 +147,8 @@
         state: absent
         wait: true
       loop:
-        - vincent-db1-bootvol
-        - vincent-db2-bootvol
+        - "{{ demo_prefix }}-db1-bootvol"
+        - "{{ demo_prefix }}-db2-bootvol"
       failed_when: false
       tags: db
 
@@ -158,7 +158,7 @@
     - name: Delete DB1 data port
       openstack.cloud.port:
         cloud: "{{ os_cloud }}"
-        name: vincent-db1-data-port
+        name: "{{ demo_prefix }}-db1-data-port"
         state: absent
       failed_when: false
       tags: db
@@ -167,5 +167,5 @@
 
     - name: Teardown complete
       ansible.builtin.debug:
-        msg: "vincent-* tenant resources deleted."
+        msg: "{{ demo_prefix }}-* tenant resources deleted."
       tags: always

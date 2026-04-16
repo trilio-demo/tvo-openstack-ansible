@@ -4,6 +4,19 @@ os_cloud: openstack                          # cloud name in clouds.yaml
 os_project_id: <your-project-uuid>           # openstack project show <name> -f value -c id
 os_project_name: <your-project-name>
 
+# ── Resource naming ───────────────────────────────────────────────────────────
+# demo_prefix: prepended to all managed resources (VMs, volumes, ports,
+#   workloads, snapshots).  Pick something short and unique to you, e.g. alice.
+demo_prefix: <your-prefix>
+
+# demo_keypair: keypair injected into all VMs.  Defaults to <prefix>-ansible-key.
+#   Override if you want to reuse an existing keypair with a different name.
+demo_keypair: "{{ demo_prefix }}-ansible-key"
+
+# demo_sg: security group applied to all VMs and ports.
+#   Must already exist — not created by these playbooks.
+demo_sg: <your-sg-name>
+
 # ── Trilio workload definitions ───────────────────────────────────────────────
 # instance_names: VM names as they exist in your OpenStack project.
 #
@@ -15,37 +28,37 @@ os_project_name: <your-project-name>
 #   ansible-playbook playbooks/setup_trilio.yml -e target_demo=ocr
 
 trilio_workloads:
-  - name: vincent-ocr-workload
+  - name: "{{ demo_prefix }}-ocr-workload"
     description: "Prepared for One-Click Restore (OCR) demo"
     demo_tag: ocr
     instance_names:
-      - vincent-ocr-vm
+      - "{{ demo_prefix }}-ocr-vm"
     backup_target_type: <s3-backup-target-type-id>
-    snapshot_name: vincent-ocr-snapshot
+    snapshot_name: "{{ demo_prefix }}-ocr-snapshot"
 
-  - name: vincent-ir-workload
+  - name: "{{ demo_prefix }}-ir-workload"
     description: "Prepared for In-Place Restore (IR) demo"
     demo_tag: ir
     instance_names:
-      - vincent-ir-vm1
-      - vincent-ir-vm2
+      - "{{ demo_prefix }}-ir-vm1"
+      - "{{ demo_prefix }}-ir-vm2"
     backup_target_type: <nfs-backup-target-type-id>
-    snapshot_name: vincent-ir-snapshot
+    snapshot_name: "{{ demo_prefix }}-ir-snapshot"
 
-  - name: vincent-sel-workload
+  - name: "{{ demo_prefix }}-sel-workload"
     description: "Prepared for Selective Restore (SEL) demo"
     demo_tag: sel
     instance_names:
-      - vincent-sel-vm1
-      - vincent-sel-vm2
+      - "{{ demo_prefix }}-sel-vm1"
+      - "{{ demo_prefix }}-sel-vm2"
     backup_target_type: <nfs-backup-target-type-id>
-    snapshot_name: vincent-sel-snapshot
+    snapshot_name: "{{ demo_prefix }}-sel-snapshot"
 
-  - name: vincent-db-workload
+  - name: "{{ demo_prefix }}-db-workload"
     description: "Prepared for DB backup demo"
     demo_tag: db
     instance_names:
-      - vincent-db1-vm
-      - vincent-db2-vm
+      - "{{ demo_prefix }}-db1-vm"
+      - "{{ demo_prefix }}-db2-vm"
     backup_target_type: <s3-backup-target-type-id>
-    snapshot_name: vincent-db-snapshot
+    snapshot_name: "{{ demo_prefix }}-db-snapshot"

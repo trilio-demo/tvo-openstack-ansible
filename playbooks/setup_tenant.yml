@@ -1,6 +1,6 @@
 ---
 # setup_tenant.yml
-# Create all vincent-* OpenStack tenant resources from scratch.
+# Create all demo OpenStack tenant resources from scratch.
 # Shared infra (networks, security groups, keypairs, images) must already exist.
 # Idempotent — safe to re-run; existing resources are left unchanged.
 #
@@ -13,7 +13,7 @@
 #   ansible-playbook playbooks/setup_tenant.yml --tags sel
 #   ansible-playbook playbooks/setup_tenant.yml --tags db
 
-- name: Setup vincent-* tenant resources
+- name: "Setup {{ demo_prefix }}-* tenant resources"
   hosts: localhost
   connection: local
   gather_facts: false
@@ -50,19 +50,19 @@
       failed_when: _data_net.networks | length == 0
       tags: always
 
-    - name: Check security group vbsg-ssh exists
+    - name: "Check security group {{ demo_sg }} exists"
       openstack.cloud.security_group_info:
         cloud: "{{ os_cloud }}"
-        name: vbsg-ssh
+        name: "{{ demo_sg }}"
         project_id: "{{ os_project_id }}"
       register: _sg
       failed_when: _sg.security_groups | length == 0
       tags: always
 
-    - name: Check keypair vincent-ansible-key exists
+    - name: "Check keypair {{ demo_keypair }} exists"
       openstack.cloud.keypair_info:
         cloud: "{{ os_cloud }}"
-        name: vincent-ansible-key
+        name: "{{ demo_keypair }}"
       register: _kp
       failed_when: _kp.keypairs | length == 0
       tags: always
@@ -96,7 +96,7 @@
     - name: Create OCR boot volume
       openstack.cloud.volume:
         cloud: "{{ os_cloud }}"
-        name: vincent-ocr-bootvol
+        name: "{{ demo_prefix }}-ocr-bootvol"
         size: 1
         image: cirros
         state: present
@@ -106,7 +106,7 @@
     - name: Create OCR data volume
       openstack.cloud.volume:
         cloud: "{{ os_cloud }}"
-        name: vincent-ocr-datavol
+        name: "{{ demo_prefix }}-ocr-datavol"
         size: 4
         state: present
         wait: true
@@ -115,16 +115,16 @@
     - name: Create OCR server
       openstack.cloud.server:
         cloud: "{{ os_cloud }}"
-        name: vincent-ocr-vm
-        boot_volume: vincent-ocr-bootvol
+        name: "{{ demo_prefix }}-ocr-vm"
+        boot_volume: "{{ demo_prefix }}-ocr-bootvol"
         flavor: m1.tiny
         nics:
           - net-id: "{{ _prod_net.networks[0].id }}"
-        key_name: vincent-ansible-key
+        key_name: "{{ demo_keypair }}"
         security_groups:
-          - vbsg-ssh
+          - "{{ demo_sg }}"
         volumes:
-          - vincent-ocr-datavol
+          - "{{ demo_prefix }}-ocr-datavol"
         userdata: "{{ lookup('file', cloud_init_file) }}"
         state: present
         wait: true
@@ -138,7 +138,7 @@
     - name: Create IR VM1 boot volume
       openstack.cloud.volume:
         cloud: "{{ os_cloud }}"
-        name: vincent-ir-vm1-bootvol
+        name: "{{ demo_prefix }}-ir-vm1-bootvol"
         size: 1
         image: cirros
         state: present
@@ -148,7 +148,7 @@
     - name: Create IR VM1 data volume
       openstack.cloud.volume:
         cloud: "{{ os_cloud }}"
-        name: vincent-ir-vm1-datavol
+        name: "{{ demo_prefix }}-ir-vm1-datavol"
         size: 4
         state: present
         wait: true
@@ -157,7 +157,7 @@
     - name: Create IR VM2 boot volume
       openstack.cloud.volume:
         cloud: "{{ os_cloud }}"
-        name: vincent-ir-vm2-bootvol
+        name: "{{ demo_prefix }}-ir-vm2-bootvol"
         size: 1
         image: cirros
         state: present
@@ -167,16 +167,16 @@
     - name: Create IR VM1 server
       openstack.cloud.server:
         cloud: "{{ os_cloud }}"
-        name: vincent-ir-vm1
-        boot_volume: vincent-ir-vm1-bootvol
+        name: "{{ demo_prefix }}-ir-vm1"
+        boot_volume: "{{ demo_prefix }}-ir-vm1-bootvol"
         flavor: m1.tiny
         nics:
           - net-id: "{{ _prod_net.networks[0].id }}"
-        key_name: vincent-ansible-key
+        key_name: "{{ demo_keypair }}"
         security_groups:
-          - vbsg-ssh
+          - "{{ demo_sg }}"
         volumes:
-          - vincent-ir-vm1-datavol
+          - "{{ demo_prefix }}-ir-vm1-datavol"
         userdata: "{{ lookup('file', cloud_init_file) }}"
         state: present
         wait: true
@@ -185,14 +185,14 @@
     - name: Create IR VM2 server
       openstack.cloud.server:
         cloud: "{{ os_cloud }}"
-        name: vincent-ir-vm2
-        boot_volume: vincent-ir-vm2-bootvol
+        name: "{{ demo_prefix }}-ir-vm2"
+        boot_volume: "{{ demo_prefix }}-ir-vm2-bootvol"
         flavor: m1.tiny
         nics:
           - net-id: "{{ _prod_net.networks[0].id }}"
-        key_name: vincent-ansible-key
+        key_name: "{{ demo_keypair }}"
         security_groups:
-          - vbsg-ssh
+          - "{{ demo_sg }}"
         auto_ip: false
         userdata: "{{ lookup('file', cloud_init_file) }}"
         state: present
@@ -212,21 +212,21 @@
         state: present
         wait: true
       loop:
-        - vincent-sel-vm1-bootvol
-        - vincent-sel-vm2-bootvol
+        - "{{ demo_prefix }}-sel-vm1-bootvol"
+        - "{{ demo_prefix }}-sel-vm2-bootvol"
       tags: sel
 
     - name: Create SEL VM1 server (prod-network)
       openstack.cloud.server:
         cloud: "{{ os_cloud }}"
-        name: vincent-sel-vm1
-        boot_volume: vincent-sel-vm1-bootvol
+        name: "{{ demo_prefix }}-sel-vm1"
+        boot_volume: "{{ demo_prefix }}-sel-vm1-bootvol"
         flavor: m1.tiny
         nics:
           - net-id: "{{ _prod_net.networks[0].id }}"
-        key_name: vincent-ansible-key
+        key_name: "{{ demo_keypair }}"
         security_groups:
-          - vbsg-ssh
+          - "{{ demo_sg }}"
         userdata: "{{ lookup('file', cloud_init_file) }}"
         state: present
         wait: true
@@ -235,14 +235,14 @@
     - name: Create SEL VM2 server (data-network)
       openstack.cloud.server:
         cloud: "{{ os_cloud }}"
-        name: vincent-sel-vm2
-        boot_volume: vincent-sel-vm2-bootvol
+        name: "{{ demo_prefix }}-sel-vm2"
+        boot_volume: "{{ demo_prefix }}-sel-vm2-bootvol"
         flavor: m1.tiny
         nics:
           - net-id: "{{ _data_net.networks[0].id }}"
-        key_name: vincent-ansible-key
+        key_name: "{{ demo_keypair }}"
         security_groups:
-          - vbsg-ssh
+          - "{{ demo_sg }}"
         auto_ip: false
         userdata: "{{ lookup('file', cloud_init_file) }}"
         state: present
@@ -256,7 +256,7 @@
     - name: Create DB1 boot volume
       openstack.cloud.volume:
         cloud: "{{ os_cloud }}"
-        name: vincent-db1-bootvol
+        name: "{{ demo_prefix }}-db1-bootvol"
         size: 1
         image: cirros
         state: present
@@ -266,10 +266,10 @@
     - name: Create DB1 data port on data-network
       openstack.cloud.port:
         cloud: "{{ os_cloud }}"
-        name: vincent-db1-data-port
+        name: "{{ demo_prefix }}-db1-data-port"
         network: "{{ _data_net.networks[0].id }}"
         security_groups:
-          - vbsg-ssh
+          - "{{ demo_sg }}"
         state: present
       tags: db
 
@@ -277,7 +277,7 @@
       openstack.cloud.port_info:
         cloud: "{{ os_cloud }}"
         filters:
-          name: vincent-db1-data-port
+          name: "{{ demo_prefix }}-db1-data-port"
           project_id: "{{ os_project_id }}"
       register: _db1_port_info
       tags: db
@@ -285,15 +285,15 @@
     - name: Create DB1 server (prod-network + data-network via port)
       openstack.cloud.server:
         cloud: "{{ os_cloud }}"
-        name: vincent-db1-vm
-        boot_volume: vincent-db1-bootvol
+        name: "{{ demo_prefix }}-db1-vm"
+        boot_volume: "{{ demo_prefix }}-db1-bootvol"
         flavor: m1.tiny
         nics:
           - net-id: "{{ _prod_net.networks[0].id }}"
           - port-id: "{{ _db1_port_info.ports[0].id }}"
-        key_name: vincent-ansible-key
+        key_name: "{{ demo_keypair }}"
         security_groups:
-          - vbsg-ssh
+          - "{{ demo_sg }}"
         auto_ip: false
         userdata: "{{ lookup('file', cloud_init_file) }}"
         state: present
@@ -304,7 +304,7 @@
     - name: Create DB2 boot volume
       openstack.cloud.volume:
         cloud: "{{ os_cloud }}"
-        name: vincent-db2-bootvol
+        name: "{{ demo_prefix }}-db2-bootvol"
         size: 1
         image: cirros
         state: present
@@ -314,7 +314,7 @@
     - name: Create DB2 data volume
       openstack.cloud.volume:
         cloud: "{{ os_cloud }}"
-        name: vincent-db2-datavol
+        name: "{{ demo_prefix }}-db2-datavol"
         size: 4
         state: present
         wait: true
@@ -323,17 +323,17 @@
     - name: Create DB2 server
       openstack.cloud.server:
         cloud: "{{ os_cloud }}"
-        name: vincent-db2-vm
-        boot_volume: vincent-db2-bootvol
+        name: "{{ demo_prefix }}-db2-vm"
+        boot_volume: "{{ demo_prefix }}-db2-bootvol"
         flavor: m1.tiny
         nics:
           - net-id: "{{ _prod_net.networks[0].id }}"
-        key_name: vincent-ansible-key
+        key_name: "{{ demo_keypair }}"
         security_groups:
-          - vbsg-ssh
+          - "{{ demo_sg }}"
         auto_ip: false
         volumes:
-          - vincent-db2-datavol
+          - "{{ demo_prefix }}-db2-datavol"
         userdata: "{{ lookup('file', cloud_init_file) }}"
         state: present
         wait: true
@@ -341,7 +341,7 @@
 
     # ── Phase 3: Verify ───────────────────────────────────────────────────────
 
-    - name: Collect server info for all vincent-* VMs
+    - name: "Collect server info for all {{ demo_prefix }}-* VMs"
       openstack.cloud.server_info:
         cloud: "{{ os_cloud }}"
         server: "{{ item }}"
@@ -349,13 +349,13 @@
           project_id: "{{ os_project_id }}"
       register: _server_check
       loop:
-        - vincent-ocr-vm
-        - vincent-ir-vm1
-        - vincent-ir-vm2
-        - vincent-sel-vm1
-        - vincent-sel-vm2
-        - vincent-db1-vm
-        - vincent-db2-vm
+        - "{{ demo_prefix }}-ocr-vm"
+        - "{{ demo_prefix }}-ir-vm1"
+        - "{{ demo_prefix }}-ir-vm2"
+        - "{{ demo_prefix }}-sel-vm1"
+        - "{{ demo_prefix }}-sel-vm2"
+        - "{{ demo_prefix }}-db1-vm"
+        - "{{ demo_prefix }}-db2-vm"
       tags: always
 
     - name: Report server states

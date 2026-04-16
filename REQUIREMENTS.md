@@ -16,15 +16,15 @@ cp vars/main.yml.sample vars/main.yml
 | `clouds.yaml.sample` | `clouds.yaml` | `auth_url`, `username`, `project_id`, `project_name` |
 | `secure.yaml.sample` | `secure.yaml` | OpenStack password |
 | `cloud-init-password.yaml.sample` | `cloud-init-password.yaml` | Hashed Cirros console password — generate with `openssl passwd -6 <password>` |
-| `vars/main.yml.sample` | `vars/main.yml` | `os_project_id`, `os_project_name`, backup target type IDs |
+| `vars/main.yml.sample` | `vars/main.yml` | `os_project_id`, `os_project_name`, `demo_prefix`, `demo_keypair`, `demo_sg`, backup target type IDs |
 
 ### 2. Create the keypair
 
 ```bash
-openstack keypair create vincent-ansible-key --public-key ~/.ssh/id_rsa.pub
+openstack keypair create <your-prefix>-ansible-key --public-key ~/.ssh/id_rsa.pub
 ```
 
-Or update `vars/main.yml` and the server tasks to reference an existing keypair.
+Or set `demo_keypair` in `vars/main.yml` to point to an existing keypair.
 
 ### 3. Install dependencies
 
@@ -78,8 +78,8 @@ They are **not** created or deleted by these playbooks.
 | `prod-network` | Network | Primary tenant network for all VMs |
 | `data-network` | Network | Secondary network for DB and SEL demos |
 | External / provider network | Network | Source of floating IPs |
-| `vbsg-ssh` | Security group | Must allow SSH inbound; applied to all VMs |
-| `vincent-ansible-key` | Keypair | Injected into all VMs — see setup step 2 |
+| Security group (`demo_sg`) | Security group | Must allow SSH inbound; applied to all VMs |
+| Keypair (`demo_keypair`) | Keypair | Injected into all VMs — see setup step 2 |
 | S3 backup target | Trilio backup target | Used by OCR and DB workloads |
 | NFS backup target | Trilio backup target | Used by IR and SEL workloads |
 | `cirros` | Image | Used for all demo VMs |
@@ -89,59 +89,62 @@ They are **not** created or deleted by these playbooks.
 
 ## Resource Naming
 
-All Ansible-managed resources use the `vincent-` prefix. Teardown targets `vincent-*`
-resources only — any other resources in the project are never touched.
+All Ansible-managed resources are prefixed with `demo_prefix` (set in `vars/main.yml`).
+Teardown targets only resources with that prefix — any other resources in the project
+are never touched.
+
+The tables below use `<prefix>` to represent the value of `demo_prefix`.
 
 ### Instances
 
 | Demo | VM Name | Flavor | Network(s) |
 |------|---------|--------|------------|
-| OCR | `vincent-ocr-vm` | m1.tiny | prod-network |
-| IR VM1 | `vincent-ir-vm1` | m1.tiny | prod-network |
-| IR VM2 | `vincent-ir-vm2` | m1.tiny | prod-network |
-| SEL VM1 | `vincent-sel-vm1` | m1.tiny | prod-network |
-| SEL VM2 | `vincent-sel-vm2` | m1.tiny | data-network |
-| DB1 | `vincent-db1-vm` | m1.tiny | prod-network + data-network |
-| DB2 | `vincent-db2-vm` | m1.tiny | prod-network |
+| OCR | `<prefix>-ocr-vm` | m1.tiny | prod-network |
+| IR VM1 | `<prefix>-ir-vm1` | m1.tiny | prod-network |
+| IR VM2 | `<prefix>-ir-vm2` | m1.tiny | prod-network |
+| SEL VM1 | `<prefix>-sel-vm1` | m1.tiny | prod-network |
+| SEL VM2 | `<prefix>-sel-vm2` | m1.tiny | data-network |
+| DB1 | `<prefix>-db1-vm` | m1.tiny | prod-network + data-network |
+| DB2 | `<prefix>-db2-vm` | m1.tiny | prod-network |
 
 ### Volumes
 
 | Demo | Boot Volume (1G) | Data Volume (4G) |
 |------|------------------|------------------|
-| OCR | `vincent-ocr-bootvol` | `vincent-ocr-datavol` |
-| IR VM1 | `vincent-ir-vm1-bootvol` | `vincent-ir-vm1-datavol` |
-| IR VM2 | `vincent-ir-vm2-bootvol` | — |
-| SEL VM1 | `vincent-sel-vm1-bootvol` | — |
-| SEL VM2 | `vincent-sel-vm2-bootvol` | — |
-| DB1 | `vincent-db1-bootvol` | — |
-| DB2 | `vincent-db2-bootvol` | `vincent-db2-datavol` |
+| OCR | `<prefix>-ocr-bootvol` | `<prefix>-ocr-datavol` |
+| IR VM1 | `<prefix>-ir-vm1-bootvol` | `<prefix>-ir-vm1-datavol` |
+| IR VM2 | `<prefix>-ir-vm2-bootvol` | — |
+| SEL VM1 | `<prefix>-sel-vm1-bootvol` | — |
+| SEL VM2 | `<prefix>-sel-vm2-bootvol` | — |
+| DB1 | `<prefix>-db1-bootvol` | — |
+| DB2 | `<prefix>-db2-bootvol` | `<prefix>-db2-datavol` |
 
 ### Ports
 
 | Demo | Port Name |
 |------|-----------|
-| DB1 | `vincent-db1-data-port` |
+| DB1 | `<prefix>-db1-data-port` |
 
 ### Trilio Resources
 
 | Demo | Workload Name | Instances | Backup Target | Snapshot Name |
 |------|---------------|-----------|---------------|---------------|
-| OCR | `vincent-ocr-workload` | vincent-ocr-vm | S3 | `vincent-ocr-snapshot` |
-| IR | `vincent-ir-workload` | vincent-ir-vm1 + vincent-ir-vm2 | NFS | `vincent-ir-snapshot` |
-| SEL | `vincent-sel-workload` | vincent-sel-vm1 + vincent-sel-vm2 | NFS | `vincent-sel-snapshot` |
-| DB | `vincent-db-workload` | vincent-db1-vm + vincent-db2-vm | S3 | `vincent-db-snapshot` |
+| OCR | `<prefix>-ocr-workload` | `<prefix>-ocr-vm` | S3 | `<prefix>-ocr-snapshot` |
+| IR | `<prefix>-ir-workload` | `<prefix>-ir-vm1` + `<prefix>-ir-vm2` | NFS | `<prefix>-ir-snapshot` |
+| SEL | `<prefix>-sel-workload` | `<prefix>-sel-vm1` + `<prefix>-sel-vm2` | NFS | `<prefix>-sel-snapshot` |
+| DB | `<prefix>-db-workload` | `<prefix>-db1-vm` + `<prefix>-db2-vm` | S3 | `<prefix>-db-snapshot` |
 
 ---
 
 ## Playbook Design
 
 ### `setup_tenant.yml`
-Create all `vincent-*` OpenStack resources from scratch.
+Create all `<prefix>-*` OpenStack resources from scratch.
 
 **Phase 1 — Prerequisite checks (fail-fast):**
 - Networks exist: `prod-network`, `data-network` (project-scoped)
-- Security group exists: `vbsg-ssh`
-- Keypair exists: `vincent-ansible-key`
+- Security group exists: value of `demo_sg`
+- Keypair exists: value of `demo_keypair`
 - Flavor exists: `m1.tiny`
 - Image exists: `cirros`
 
@@ -160,7 +163,7 @@ Create all `vincent-*` OpenStack resources from scratch.
 ---
 
 ### `teardown_tenant.yml`
-Delete all `vincent-*` OpenStack resources.
+Delete all `<prefix>-*` OpenStack resources.
 
 1. Delete servers (wait for DELETED before proceeding)
 2. Delete data volumes
@@ -184,7 +187,7 @@ Create Trilio workloads and take initial full snapshots.
 ---
 
 ### `teardown_trilio.yml`
-Delete all `vincent-*` Trilio workloads and snapshots.
+Delete all `<prefix>-*` Trilio workloads and snapshots.
 
 1. List all workloads; for each: delete all snapshots (wait for completion)
 2. Delete each workload (wait for completion)

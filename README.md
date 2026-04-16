@@ -50,8 +50,8 @@ The following must exist in your OpenStack project before running the playbooks:
 | `prod-network` | Primary tenant network |
 | `data-network` | Secondary network (DB + SEL demos) |
 | External / provider network | Source of floating IPs |
-| `vbsg-ssh` security group | Must allow SSH inbound |
-| `vincent-ansible-key` keypair | Injected into all VMs — see setup step 3 below |
+| Security group (configured as `demo_sg`) | Must allow SSH inbound |
+| Keypair (configured as `demo_keypair`) | Injected into all VMs — see setup step 3 below |
 | Trilio S3 backup target | Used by OCR and DB workloads |
 | Trilio NFS backup target | Used by IR and SEL workloads |
 | `cirros` image | Used for all demo VMs |
@@ -91,16 +91,19 @@ cp cloud-init-password.yaml.sample cloud-init-password.yaml
 
 - `os_project_id` — your OpenStack project UUID
 - `os_project_name` — your project name
+- `demo_prefix` — short name used as a prefix for all managed resources (e.g. `alice`)
+- `demo_keypair` — keypair to inject into VMs (defaults to `<prefix>-ansible-key`)
+- `demo_sg` — security group applied to all VMs and ports (must already exist)
 - `backup_target_type` values — run `openstack workloadmgr backup target list` to get
   the correct type IDs for your S3 and NFS targets
 
 ### 3. Create the keypair
 
 ```bash
-openstack keypair create vincent-ansible-key --public-key ~/.ssh/id_rsa.pub
+openstack keypair create <your-prefix>-ansible-key --public-key ~/.ssh/id_rsa.pub
 ```
 
-Or update `vars/main.yml` and the server tasks to reference an existing keypair.
+Or set `demo_keypair` in `vars/main.yml` to point to an existing keypair.
 
 ---
 
@@ -133,8 +136,8 @@ ansible-playbook playbooks/setup_trilio.yml    --tags ocr
 
 ## Notes
 
-- All managed resources use the `vincent-` prefix.
-- Teardown targets `vincent-*` resources only — shared infrastructure is never touched.
+- All managed resources use the prefix set by `demo_prefix` in `vars/main.yml`.
+- Teardown targets only resources with that prefix — shared infrastructure is never touched.
 - Boot volumes are not auto-deleted when VMs are removed; delete them explicitly via
   `teardown_tenant.yml` or the OpenStack dashboard.
 - Volume mounting inside VMs (for data volumes) is manual — Cirros cloud-init is too

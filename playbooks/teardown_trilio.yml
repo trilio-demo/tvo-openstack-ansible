@@ -6,7 +6,7 @@
 # Usage:
 #   ansible-playbook playbooks/teardown_trilio.yml
 #
-# Note: deletes every workload visible to the authenticated project (vincent-demo).
+# Note: deletes every workload visible to the authenticated project.
 # That is safe because workloadmgr API is project-scoped by the Keystone token.
 
 - name: Teardown Trilio workloads and snapshots
