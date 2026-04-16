@@ -11,12 +11,12 @@ tear it down and rebuild it between demo sessions.
 
 ## Demo Scenarios
 
-| Demo | Purpose | Restore Time |
-|------|---------|-------------|
-| **OCR** — One-Click Restore | Delete instance + volumes, restore from snapshot | ~30 min |
-| **IR** — In-Place Restore | Restore data volume in place; also used for File Browse | ~2 min |
-| **SEL** — Selective Restore | Change network + flavor, then restore original state | ~25 min |
-| **DB** — Database Backup | Dual-network and dual-volume instances | — |
+| Demo | Purpose |
+|------|---------|
+| **OCR** — One-Click Restore | Delete instance + volumes, restore from snapshot |
+| **IR** — In-Place Restore | Restore data volume in place; also used for File Browse |
+| **SEL** — Selective Restore | Change network + flavor, then restore original state |
+| **DB** — Database Backup | Dual-network and dual-volume instances |
 
 ---
 

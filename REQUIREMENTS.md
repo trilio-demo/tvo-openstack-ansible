@@ -59,12 +59,12 @@ setup_trilio.yml       ↔  teardown_trilio.yml
 
 ## Demo Scenarios
 
-| Demo | VMs | Volumes | Networks | Purpose | Restore Time |
-|------|-----|---------|----------|---------|-------------|
-| OCR  | 1   | 2       | 1        | One-Click Restore — delete instance + volumes, restore from snapshot | ~30 min |
-| IR   | 2   | 3       | 1        | In-Place Restore of data volume; also used for File Browse | ~2 min |
-| SEL  | 2   | 1 each  | 2        | Selective Restore — change network + flavor, restore original state | ~25 min |
-| DB   | 2   | 3       | 2        | Dual-network and dual-volume instances for DB backup demo | — |
+| Demo | VMs | Volumes | Networks | Purpose |
+|------|-----|---------|----------|---------|
+| OCR  | 1   | 2       | 1        | One-Click Restore — delete instance + volumes, restore from snapshot |
+| IR   | 2   | 3       | 1        | In-Place Restore of data volume; also used for File Browse |
+| SEL  | 2   | 1 each  | 2        | Selective Restore — change network + flavor, restore original state |
+| DB   | 2   | 3       | 2        | Dual-network and dual-volume instances for DB backup demo |
 
 ---
 
