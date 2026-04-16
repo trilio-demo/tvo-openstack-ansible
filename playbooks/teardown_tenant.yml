@@ -1,0 +1,171 @@
+---
+# teardown_tenant.yml
+# Delete all vincent-* OpenStack tenant resources: servers, volumes, ports.
+# Does NOT touch networks, security groups, keypairs, images, or backup targets.
+# Safe to run against a partially-built environment — missing resources are skipped.
+#
+# Usage — all demos:
+#   ansible-playbook playbooks/teardown_tenant.yml
+#
+# Usage — single demo:
+#   ansible-playbook playbooks/teardown_tenant.yml --tags ocr
+#   ansible-playbook playbooks/teardown_tenant.yml --tags ir
+#   ansible-playbook playbooks/teardown_tenant.yml --tags sel
+#   ansible-playbook playbooks/teardown_tenant.yml --tags db
+
+- name: Teardown vincent-* tenant resources
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars_files:
+    - ../vars/main.yml
+  vars:
+    ansible_python_interpreter: "{{ lookup('env', 'VIRTUAL_ENV') }}/bin/python3"
+  environment:
+    OS_CLIENT_CONFIG_FILE: "{{ playbook_dir }}/../clouds.yaml"
+
+  tasks:
+
+    # ── Phase 1: Delete servers ────────────────────────────────────────────────
+    # Wait for each server to reach DELETED before moving on — volumes cannot
+    # be deleted while still attached to a running or shutoff instance.
+
+    - name: Delete OCR server
+      openstack.cloud.server:
+        cloud: "{{ os_cloud }}"
+        name: vincent-ocr-vm
+        state: absent
+        wait: true
+      failed_when: false
+      tags: ocr
+
+    - name: Delete IR servers
+      openstack.cloud.server:
+        cloud: "{{ os_cloud }}"
+        name: "{{ item }}"
+        state: absent
+        wait: true
+      loop:
+        - vincent-ir-vm1
+        - vincent-ir-vm2
+      failed_when: false
+      tags: ir
+
+    - name: Delete SEL servers
+      openstack.cloud.server:
+        cloud: "{{ os_cloud }}"
+        name: "{{ item }}"
+        state: absent
+        wait: true
+      loop:
+        - vincent-sel-vm1
+        - vincent-sel-vm2
+      failed_when: false
+      tags: sel
+
+    - name: Delete DB servers
+      openstack.cloud.server:
+        cloud: "{{ os_cloud }}"
+        name: "{{ item }}"
+        state: absent
+        wait: true
+      loop:
+        - vincent-db1-vm
+        - vincent-db2-vm
+      failed_when: false
+      tags: db
+
+    # ── Phase 2: Delete data volumes ──────────────────────────────────────────
+    # Data volumes first — no boot dependency.
+
+    - name: Delete OCR data volume
+      openstack.cloud.volume:
+        cloud: "{{ os_cloud }}"
+        name: vincent-ocr-datavol
+        state: absent
+        wait: true
+      failed_when: false
+      tags: ocr
+
+    - name: Delete IR data volume
+      openstack.cloud.volume:
+        cloud: "{{ os_cloud }}"
+        name: vincent-ir-vm1-datavol
+        state: absent
+        wait: true
+      failed_when: false
+      tags: ir
+
+    - name: Delete DB2 data volume
+      openstack.cloud.volume:
+        cloud: "{{ os_cloud }}"
+        name: vincent-db2-datavol
+        state: absent
+        wait: true
+      failed_when: false
+      tags: db
+
+    # ── Phase 3: Delete boot volumes ──────────────────────────────────────────
+
+    - name: Delete OCR boot volume
+      openstack.cloud.volume:
+        cloud: "{{ os_cloud }}"
+        name: vincent-ocr-bootvol
+        state: absent
+        wait: true
+      failed_when: false
+      tags: ocr
+
+    - name: Delete IR boot volumes
+      openstack.cloud.volume:
+        cloud: "{{ os_cloud }}"
+        name: "{{ item }}"
+        state: absent
+        wait: true
+      loop:
+        - vincent-ir-vm1-bootvol
+        - vincent-ir-vm2-bootvol
+      failed_when: false
+      tags: ir
+
+    - name: Delete SEL boot volumes
+      openstack.cloud.volume:
+        cloud: "{{ os_cloud }}"
+        name: "{{ item }}"
+        state: absent
+        wait: true
+      loop:
+        - vincent-sel-vm1-bootvol
+        - vincent-sel-vm2-bootvol
+      failed_when: false
+      tags: sel
+
+    - name: Delete DB boot volumes
+      openstack.cloud.volume:
+        cloud: "{{ os_cloud }}"
+        name: "{{ item }}"
+        state: absent
+        wait: true
+      loop:
+        - vincent-db1-bootvol
+        - vincent-db2-bootvol
+      failed_when: false
+      tags: db
+
+    # ── Phase 4: Delete ports ─────────────────────────────────────────────────
+    # Explicit cleanup — port may persist if server deletion left it orphaned.
+
+    - name: Delete DB1 data port
+      openstack.cloud.port:
+        cloud: "{{ os_cloud }}"
+        name: vincent-db1-data-port
+        state: absent
+      failed_when: false
+      tags: db
+
+    # ── Phase 5: Report ───────────────────────────────────────────────────────
+
+    - name: Teardown complete
+      ansible.builtin.debug:
+        msg: "vincent-* tenant resources deleted."
+      tags: always

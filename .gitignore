@@ -1,0 +1,24 @@
+# Credentials — never commit these
+secure.yaml
+vars/vault.yml
+vars/main.yml
+clouds.yaml
+cloud-init-password.yaml
+*.password
+.env
+
+# Project-specific / not for public repo
+collateral/
+framework/
+inventory/
+CLAUDE.md
+OSP-Demos.code-workspace
+
+# Python venv
+.venv/
+
+# Ansible retry files
+*.retry
+
+# OS
+.DS_Store

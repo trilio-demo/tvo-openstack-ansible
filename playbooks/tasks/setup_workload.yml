@@ -1,0 +1,81 @@
+---
+# tasks/setup_workload.yml
+# Called once per workload via include_tasks.
+# Expects: workload (dict from trilio_workloads), vm_id_map (dict), openstack_bin, os_env
+
+# ── Step 1: Create workload ────────────────────────────────────────────────
+
+- name: "Create workload {{ workload.name }}"
+  ansible.builtin.shell:
+    cmd: >
+      {{ openstack_bin }} workloadmgr workload create
+      --display-name "{{ workload.name }}"
+      --display-description "{{ workload.description }}"
+      --instance {{ workload.instance_names | map('extract', vm_id_map) | join(' ') }}
+      --backup-target-type {{ workload.backup_target_type }}
+      --manual retention=30
+  environment: "{{ os_env }}"
+  tags: always
+
+# ── Step 2: Wait for workload to reach available ───────────────────────────
+
+- name: "Wait for workload {{ workload.name }} to reach available"
+  ansible.builtin.command:
+    cmd: "{{ openstack_bin }} workloadmgr workload list -f json"
+  environment: "{{ os_env }}"
+  register: workload_avail_poll
+  until: >-
+    ((workload_avail_poll.stdout or '[]') | from_json)
+    | selectattr('Name', 'equalto', workload.name)
+    | map(attribute='Status') | first | default('creating') == 'available'
+  retries: 20
+  delay: 15
+  changed_when: false
+  tags: always
+
+# ── Step 3: Resolve workload ID ────────────────────────────────────────────
+
+- name: "Get ID for workload {{ workload.name }}"
+  ansible.builtin.set_fact:
+    workload_id: >-
+      {{ ((workload_avail_poll.stdout or '[]') | from_json)
+         | selectattr('Name', 'equalto', workload.name)
+         | map(attribute='ID') | first }}
+  tags: always
+
+# ── Step 4: Trigger full snapshot ─────────────────────────────────────────
+
+- name: "Trigger full snapshot {{ workload.snapshot_name }}"
+  ansible.builtin.shell:
+    cmd: >
+      {{ openstack_bin }} workloadmgr workload snapshot
+      {{ workload_id }}
+      --full
+      --display-name "{{ workload.snapshot_name }}"
+  environment: "{{ os_env }}"
+  tags: always
+
+# ── Step 5: Wait for snapshot to reach available ───────────────────────────
+
+- name: "Wait for snapshot {{ workload.snapshot_name }} to reach available"
+  ansible.builtin.command:
+    cmd: >
+      {{ openstack_bin }} workloadmgr workload snapshot list
+      --workload_id {{ workload_id }}
+      -f json
+  environment: "{{ os_env }}"
+  register: snap_poll
+  until: >-
+    ((snap_poll.stdout or '[]') | from_json)
+    | selectattr('Name', 'equalto', workload.snapshot_name)
+    | selectattr('Status', 'equalto', 'available')
+    | list | length > 0
+  retries: 60
+  delay: 30
+  changed_when: false
+  tags: always
+
+- name: "Workload {{ workload.name }} setup complete"
+  ansible.builtin.debug:
+    msg: "Snapshot {{ workload.snapshot_name }} is available."
+  tags: always

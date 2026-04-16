@@ -1,0 +1,119 @@
+---
+# setup_trilio.yml
+# Create Trilio workloads and take initial full snapshots.
+# VMs must already be running. Workload definitions are in vars/main.yml.
+#
+# Usage — all demos:
+#   ansible-playbook playbooks/setup_trilio.yml
+#
+# Usage — single demo (tag filter):
+#   ansible-playbook playbooks/setup_trilio.yml --tags ocr
+#   ansible-playbook playbooks/setup_trilio.yml --tags ir
+#   ansible-playbook playbooks/setup_trilio.yml --tags sel
+#   ansible-playbook playbooks/setup_trilio.yml --tags db
+#
+# Note: --check mode is not meaningful for this playbook (all tasks are
+# command/shell; no idempotent Ansible modules to simulate).
+
+- name: Setup Trilio workloads and initial snapshots
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars:
+    openstack_bin: "{{ playbook_dir }}/../.venv/bin/openstack"
+    os_env:
+      OS_CLOUD: "{{ os_cloud }}"
+      OS_CLIENT_CONFIG_FILE: "{{ playbook_dir }}/../clouds.yaml"
+  vars_files:
+    - ../vars/main.yml
+
+  tasks:
+
+    # ── Prerequisites (always run, even when a tag filter is active) ───────────
+
+    - name: Collect all unique VM names across all workloads
+      ansible.builtin.set_fact:
+        all_instance_names: >-
+          {{ trilio_workloads | map(attribute='instance_names') | flatten | unique }}
+      tags: always
+
+    - name: Look up VM ID for each instance name
+      ansible.builtin.command:
+        cmd: "{{ openstack_bin }} server show {{ item }} -f json"
+      environment: "{{ os_env }}"
+      loop: "{{ all_instance_names }}"
+      loop_control:
+        label: "{{ item }}"
+      register: vm_show_results
+      changed_when: false
+      tags: always
+
+    - name: Build VM name → ID map
+      ansible.builtin.set_fact:
+        vm_id_map: >-
+          {{ vm_id_map | default({}) | combine(
+            { parsed['name']: parsed['id'] }
+            if (parsed.name is defined) else {}
+          ) }}
+      vars:
+        parsed: "{{ (item.stdout or '{}') | from_json }}"
+      loop: "{{ vm_show_results.results }}"
+      loop_control:
+        label: "{{ item.item }}"
+      tags: always
+
+    - name: Confirm VM IDs resolved
+      ansible.builtin.debug:
+        msg: "VM name → ID map: {{ vm_id_map }}"
+      tags: always
+
+    # ── OCR workload ───────────────────────────────────────────────────────────
+
+    - name: Setup OCR workload
+      ansible.builtin.include_tasks:
+        file: tasks/setup_workload.yml
+      vars:
+        workload: "{{ trilio_workloads | selectattr('demo_tag', 'equalto', 'ocr') | first }}"
+      tags: ocr
+
+    # ── IR workload ────────────────────────────────────────────────────────────
+
+    - name: Setup IR workload
+      ansible.builtin.include_tasks:
+        file: tasks/setup_workload.yml
+      vars:
+        workload: "{{ trilio_workloads | selectattr('demo_tag', 'equalto', 'ir') | first }}"
+      tags: ir
+
+    # ── SEL workload ───────────────────────────────────────────────────────────
+
+    - name: Setup SEL workload
+      ansible.builtin.include_tasks:
+        file: tasks/setup_workload.yml
+      vars:
+        workload: "{{ trilio_workloads | selectattr('demo_tag', 'equalto', 'sel') | first }}"
+      tags: sel
+
+    # ── DB workload ────────────────────────────────────────────────────────────
+
+    - name: Setup DB workload
+      ansible.builtin.include_tasks:
+        file: tasks/setup_workload.yml
+      vars:
+        workload: "{{ trilio_workloads | selectattr('demo_tag', 'equalto', 'db') | first }}"
+      tags: db
+
+    # ── Final summary ──────────────────────────────────────────────────────────
+
+    - name: Show final workload state
+      ansible.builtin.command:
+        cmd: "{{ openstack_bin }} workloadmgr workload list"
+      environment: "{{ os_env }}"
+      register: final_state
+      changed_when: false
+      tags: always
+
+    - name: Print final workload state
+      ansible.builtin.debug:
+        msg: "{{ final_state.stdout_lines }}"
+      tags: always

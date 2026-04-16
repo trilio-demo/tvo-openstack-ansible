@@ -1,0 +1,127 @@
+---
+# teardown_trilio.yml
+# Delete ALL Trilio workloads and snapshots in the project.
+# VMs and volumes are NOT touched.
+#
+# Usage:
+#   ansible-playbook playbooks/teardown_trilio.yml
+#
+# Note: deletes every workload visible to the authenticated project (vincent-demo).
+# That is safe because workloadmgr API is project-scoped by the Keystone token.
+
+- name: Teardown Trilio workloads and snapshots
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars:
+    openstack_bin: "{{ playbook_dir }}/../.venv/bin/openstack"
+    os_env:
+      OS_CLOUD: "{{ os_cloud }}"
+      OS_CLIENT_CONFIG_FILE: "{{ playbook_dir }}/../clouds.yaml"
+  vars_files:
+    - ../vars/main.yml
+
+  tasks:
+
+    # ── Step 1: Inventory ──────────────────────────────────────────────────────
+
+    - name: List all workloads in project
+      ansible.builtin.command:
+        cmd: "{{ openstack_bin }} workloadmgr workload list -f json"
+      environment: "{{ os_env }}"
+      register: workload_list_raw
+      changed_when: false
+
+    - name: Parse workload list
+      ansible.builtin.set_fact:
+        existing_workloads: "{{ (workload_list_raw.stdout or '[]') | from_json }}"
+
+    - name: Report workloads found
+      ansible.builtin.debug:
+        msg: >-
+          Found {{ existing_workloads | length }} workload(s):
+          {{ existing_workloads | map(attribute='Name') | list }}
+
+    - name: End play if project is already clean
+      ansible.builtin.meta: end_play
+      when: existing_workloads | length == 0
+
+    # ── Step 2: Delete all snapshots ──────────────────────────────────────────
+
+    - name: Get snapshots for each workload
+      ansible.builtin.command:
+        cmd: "{{ openstack_bin }} workloadmgr workload snapshot list --workload_id {{ item.ID }} -f json"
+      environment: "{{ os_env }}"
+      loop: "{{ existing_workloads }}"
+      loop_control:
+        label: "{{ item.Name }}"
+      register: snapshot_list_results
+      changed_when: false
+
+    - name: Build flat list of all snapshots
+      ansible.builtin.set_fact:
+        all_snapshots: "{{ snapshot_list_results.results | map(attribute='stdout') | map('default', '[]') | map('from_json') | flatten }}"
+
+    - name: Report snapshots found
+      ansible.builtin.debug:
+        msg: "Found {{ all_snapshots | length }} snapshot(s) to delete"
+
+    - name: Delete each snapshot
+      ansible.builtin.command:
+        cmd: "{{ openstack_bin }} workloadmgr workload snapshot delete {{ item.ID }}"
+      environment: "{{ os_env }}"
+      loop: "{{ all_snapshots }}"
+      loop_control:
+        label: "{{ item.Name }} ({{ item.ID }})"
+      when: all_snapshots | length > 0
+
+    # ── Step 3: Wait for workloads to return to available ─────────────────────
+    # Snapshot deletion is async; workload re-enters 'available' when done.
+
+    - name: Wait for workloads to return to available after snapshot deletion
+      ansible.builtin.command:
+        cmd: "{{ openstack_bin }} workloadmgr workload list -f json"
+      environment: "{{ os_env }}"
+      register: workload_status_poll
+      until: >-
+        ((workload_status_poll.stdout or '[]') | from_json)
+        | selectattr('ID', 'equalto', item.ID)
+        | map(attribute='Status') | first | default('busy') == 'available'
+      retries: 30
+      delay: 10
+      changed_when: false
+      loop: "{{ existing_workloads }}"
+      loop_control:
+        label: "{{ item.Name }}"
+      when: all_snapshots | length > 0
+
+    # ── Step 4: Delete all workloads ──────────────────────────────────────────
+
+    - name: Delete each workload
+      ansible.builtin.command:
+        cmd: "{{ openstack_bin }} workloadmgr workload delete {{ item.ID }}"
+      environment: "{{ os_env }}"
+      loop: "{{ existing_workloads }}"
+      loop_control:
+        label: "{{ item.Name }}"
+
+    # ── Step 5: Confirm deletion ───────────────────────────────────────────────
+
+    - name: Wait for all workloads to disappear from project
+      ansible.builtin.command:
+        cmd: "{{ openstack_bin }} workloadmgr workload list -f json"
+      environment: "{{ os_env }}"
+      register: final_workload_poll
+      until: >-
+        ((final_workload_poll.stdout or '[]') | from_json)
+        | selectattr('ID', 'equalto', item.ID) | list | length == 0
+      retries: 30
+      delay: 10
+      changed_when: false
+      loop: "{{ existing_workloads }}"
+      loop_control:
+        label: "{{ item.Name }}"
+
+    - name: Teardown complete
+      ansible.builtin.debug:
+        msg: "All workloads and snapshots deleted from project {{ os_project_name }}."

@@ -1,0 +1,4 @@
+clouds:
+  openstack:
+    auth:
+      password: "<openstack-password>"

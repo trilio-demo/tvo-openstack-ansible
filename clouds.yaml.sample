@@ -1,0 +1,11 @@
+clouds:
+  openstack:
+    auth:
+      auth_url: http://<controller-vip>:5000
+      username: "<os-username>"
+      project_id: <project-uuid>
+      project_name: "<project-name>"
+      user_domain_name: "Default"
+    region_name: "regionOne"
+    interface: "public"
+    identity_api_version: 3

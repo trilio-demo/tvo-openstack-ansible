@@ -1,0 +1,372 @@
+---
+# setup_tenant.yml
+# Create all vincent-* OpenStack tenant resources from scratch.
+# Shared infra (networks, security groups, keypairs, images) must already exist.
+# Idempotent — safe to re-run; existing resources are left unchanged.
+#
+# Usage — all demos:
+#   ansible-playbook playbooks/setup_tenant.yml
+#
+# Usage — single demo:
+#   ansible-playbook playbooks/setup_tenant.yml --tags ocr
+#   ansible-playbook playbooks/setup_tenant.yml --tags ir
+#   ansible-playbook playbooks/setup_tenant.yml --tags sel
+#   ansible-playbook playbooks/setup_tenant.yml --tags db
+
+- name: Setup vincent-* tenant resources
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars:
+    ansible_python_interpreter: "{{ lookup('env', 'VIRTUAL_ENV') }}/bin/python3"
+    cloud_init_file: "{{ playbook_dir }}/../cloud-init-password.yaml"
+  environment:
+    OS_CLIENT_CONFIG_FILE: "{{ playbook_dir }}/../clouds.yaml"
+  vars_files:
+    - ../vars/main.yml
+
+  tasks:
+
+    # ── Phase 1: Prerequisite checks ──────────────────────────────────────────
+    # Fail fast before creating anything if shared infra is missing.
+
+    - name: Check prod-network exists (project-scoped)
+      openstack.cloud.networks_info:
+        cloud: "{{ os_cloud }}"
+        name: prod-network
+        filters:
+          project_id: "{{ os_project_id }}"
+      register: _prod_net
+      failed_when: _prod_net.networks | length == 0
+      tags: always
+
+    - name: Check data-network exists (project-scoped)
+      openstack.cloud.networks_info:
+        cloud: "{{ os_cloud }}"
+        name: data-network
+        filters:
+          project_id: "{{ os_project_id }}"
+      register: _data_net
+      failed_when: _data_net.networks | length == 0
+      tags: always
+
+    - name: Check security group vbsg-ssh exists
+      openstack.cloud.security_group_info:
+        cloud: "{{ os_cloud }}"
+        name: vbsg-ssh
+        project_id: "{{ os_project_id }}"
+      register: _sg
+      failed_when: _sg.security_groups | length == 0
+      tags: always
+
+    - name: Check keypair vincent-ansible-key exists
+      openstack.cloud.keypair_info:
+        cloud: "{{ os_cloud }}"
+        name: vincent-ansible-key
+      register: _kp
+      failed_when: _kp.keypairs | length == 0
+      tags: always
+
+    - name: Check required flavors exist
+      openstack.cloud.compute_flavor_info:
+        cloud: "{{ os_cloud }}"
+        name: "{{ item }}"
+      register: _flavor
+      failed_when: _flavor.flavors | length == 0
+      loop:
+        - m1.tiny
+      tags: always
+
+    - name: Check cirros image exists
+      openstack.cloud.image_info:
+        cloud: "{{ os_cloud }}"
+        image: cirros
+      register: _image
+      failed_when: _image.images | length == 0
+      tags: always
+
+    - name: Prerequisite checks passed
+      ansible.builtin.debug:
+        msg: "All prerequisite resources found. Proceeding with resource creation."
+      tags: always
+
+    # ── Phase 2a: OCR resources ───────────────────────────────────────────────
+    # 1 VM, prod-network, boot vol (1G from cirros) + data vol (4G)
+
+    - name: Create OCR boot volume
+      openstack.cloud.volume:
+        cloud: "{{ os_cloud }}"
+        name: vincent-ocr-bootvol
+        size: 1
+        image: cirros
+        state: present
+        wait: true
+      tags: ocr
+
+    - name: Create OCR data volume
+      openstack.cloud.volume:
+        cloud: "{{ os_cloud }}"
+        name: vincent-ocr-datavol
+        size: 4
+        state: present
+        wait: true
+      tags: ocr
+
+    - name: Create OCR server
+      openstack.cloud.server:
+        cloud: "{{ os_cloud }}"
+        name: vincent-ocr-vm
+        boot_volume: vincent-ocr-bootvol
+        flavor: m1.tiny
+        nics:
+          - net-id: "{{ _prod_net.networks[0].id }}"
+        key_name: vincent-ansible-key
+        security_groups:
+          - vbsg-ssh
+        volumes:
+          - vincent-ocr-datavol
+        userdata: "{{ lookup('file', cloud_init_file) }}"
+        state: present
+        wait: true
+      tags: ocr
+
+    # ── Phase 2b: IR resources ────────────────────────────────────────────────
+    # 2 VMs, prod-network
+    # IR VM1: boot vol (1G) + data vol (4G)
+    # IR VM2: boot vol (1G) only
+
+    - name: Create IR VM1 boot volume
+      openstack.cloud.volume:
+        cloud: "{{ os_cloud }}"
+        name: vincent-ir-vm1-bootvol
+        size: 1
+        image: cirros
+        state: present
+        wait: true
+      tags: ir
+
+    - name: Create IR VM1 data volume
+      openstack.cloud.volume:
+        cloud: "{{ os_cloud }}"
+        name: vincent-ir-vm1-datavol
+        size: 4
+        state: present
+        wait: true
+      tags: ir
+
+    - name: Create IR VM2 boot volume
+      openstack.cloud.volume:
+        cloud: "{{ os_cloud }}"
+        name: vincent-ir-vm2-bootvol
+        size: 1
+        image: cirros
+        state: present
+        wait: true
+      tags: ir
+
+    - name: Create IR VM1 server
+      openstack.cloud.server:
+        cloud: "{{ os_cloud }}"
+        name: vincent-ir-vm1
+        boot_volume: vincent-ir-vm1-bootvol
+        flavor: m1.tiny
+        nics:
+          - net-id: "{{ _prod_net.networks[0].id }}"
+        key_name: vincent-ansible-key
+        security_groups:
+          - vbsg-ssh
+        volumes:
+          - vincent-ir-vm1-datavol
+        userdata: "{{ lookup('file', cloud_init_file) }}"
+        state: present
+        wait: true
+      tags: ir
+
+    - name: Create IR VM2 server
+      openstack.cloud.server:
+        cloud: "{{ os_cloud }}"
+        name: vincent-ir-vm2
+        boot_volume: vincent-ir-vm2-bootvol
+        flavor: m1.tiny
+        nics:
+          - net-id: "{{ _prod_net.networks[0].id }}"
+        key_name: vincent-ansible-key
+        security_groups:
+          - vbsg-ssh
+        auto_ip: false
+        userdata: "{{ lookup('file', cloud_init_file) }}"
+        state: present
+        wait: true
+      tags: ir
+
+    # ── Phase 2c: SEL resources ───────────────────────────────────────────────
+    # 2 VMs: vm1 on prod-network (trilio.small), vm2 on data-network (trilio.small)
+    # Boot volumes only (1G each)
+
+    - name: Create SEL boot volumes
+      openstack.cloud.volume:
+        cloud: "{{ os_cloud }}"
+        name: "{{ item }}"
+        size: 1
+        image: cirros
+        state: present
+        wait: true
+      loop:
+        - vincent-sel-vm1-bootvol
+        - vincent-sel-vm2-bootvol
+      tags: sel
+
+    - name: Create SEL VM1 server (prod-network)
+      openstack.cloud.server:
+        cloud: "{{ os_cloud }}"
+        name: vincent-sel-vm1
+        boot_volume: vincent-sel-vm1-bootvol
+        flavor: m1.tiny
+        nics:
+          - net-id: "{{ _prod_net.networks[0].id }}"
+        key_name: vincent-ansible-key
+        security_groups:
+          - vbsg-ssh
+        userdata: "{{ lookup('file', cloud_init_file) }}"
+        state: present
+        wait: true
+      tags: sel
+
+    - name: Create SEL VM2 server (data-network)
+      openstack.cloud.server:
+        cloud: "{{ os_cloud }}"
+        name: vincent-sel-vm2
+        boot_volume: vincent-sel-vm2-bootvol
+        flavor: m1.tiny
+        nics:
+          - net-id: "{{ _data_net.networks[0].id }}"
+        key_name: vincent-ansible-key
+        security_groups:
+          - vbsg-ssh
+        auto_ip: false
+        userdata: "{{ lookup('file', cloud_init_file) }}"
+        state: present
+        wait: true
+      tags: sel
+
+    # ── Phase 2d: DB resources ────────────────────────────────────────────────
+    # DB1: 1 VM, prod-network + data-network via explicit port, boot vol only
+    # DB2: 1 VM, prod-network, boot vol (1G) + data vol (4G)
+
+    - name: Create DB1 boot volume
+      openstack.cloud.volume:
+        cloud: "{{ os_cloud }}"
+        name: vincent-db1-bootvol
+        size: 1
+        image: cirros
+        state: present
+        wait: true
+      tags: db
+
+    - name: Create DB1 data port on data-network
+      openstack.cloud.port:
+        cloud: "{{ os_cloud }}"
+        name: vincent-db1-data-port
+        network: "{{ _data_net.networks[0].id }}"
+        security_groups:
+          - vbsg-ssh
+        state: present
+      tags: db
+
+    - name: Look up DB1 data port ID
+      openstack.cloud.port_info:
+        cloud: "{{ os_cloud }}"
+        filters:
+          name: vincent-db1-data-port
+          project_id: "{{ os_project_id }}"
+      register: _db1_port_info
+      tags: db
+
+    - name: Create DB1 server (prod-network + data-network via port)
+      openstack.cloud.server:
+        cloud: "{{ os_cloud }}"
+        name: vincent-db1-vm
+        boot_volume: vincent-db1-bootvol
+        flavor: m1.tiny
+        nics:
+          - net-id: "{{ _prod_net.networks[0].id }}"
+          - port-id: "{{ _db1_port_info.ports[0].id }}"
+        key_name: vincent-ansible-key
+        security_groups:
+          - vbsg-ssh
+        auto_ip: false
+        userdata: "{{ lookup('file', cloud_init_file) }}"
+        state: present
+        wait: true
+      when: _db1_port_info.ports | length > 0
+      tags: db
+
+    - name: Create DB2 boot volume
+      openstack.cloud.volume:
+        cloud: "{{ os_cloud }}"
+        name: vincent-db2-bootvol
+        size: 1
+        image: cirros
+        state: present
+        wait: true
+      tags: db
+
+    - name: Create DB2 data volume
+      openstack.cloud.volume:
+        cloud: "{{ os_cloud }}"
+        name: vincent-db2-datavol
+        size: 4
+        state: present
+        wait: true
+      tags: db
+
+    - name: Create DB2 server
+      openstack.cloud.server:
+        cloud: "{{ os_cloud }}"
+        name: vincent-db2-vm
+        boot_volume: vincent-db2-bootvol
+        flavor: m1.tiny
+        nics:
+          - net-id: "{{ _prod_net.networks[0].id }}"
+        key_name: vincent-ansible-key
+        security_groups:
+          - vbsg-ssh
+        auto_ip: false
+        volumes:
+          - vincent-db2-datavol
+        userdata: "{{ lookup('file', cloud_init_file) }}"
+        state: present
+        wait: true
+      tags: db
+
+    # ── Phase 3: Verify ───────────────────────────────────────────────────────
+
+    - name: Collect server info for all vincent-* VMs
+      openstack.cloud.server_info:
+        cloud: "{{ os_cloud }}"
+        server: "{{ item }}"
+        filters:
+          project_id: "{{ os_project_id }}"
+      register: _server_check
+      loop:
+        - vincent-ocr-vm
+        - vincent-ir-vm1
+        - vincent-ir-vm2
+        - vincent-sel-vm1
+        - vincent-sel-vm2
+        - vincent-db1-vm
+        - vincent-db2-vm
+      tags: always
+
+    - name: Report server states
+      ansible.builtin.debug:
+        msg: >-
+          {{ item.item }}: {{
+            (item.servers | first).vm_state | default('not found')
+            if item.servers | length > 0
+            else 'not found'
+          }}
+      loop: "{{ _server_check.results }}"
+      loop_control:
+        label: "{{ item.item }}"
+      tags: always
