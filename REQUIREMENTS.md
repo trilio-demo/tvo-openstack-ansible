@@ -216,11 +216,33 @@ Tolerates missing workloads and snapshots.
 
 ---
 
+## TODOs
+
+- **Automate data volume mounting** — OCR, IR VM1, and DB2 each have a 4G data volume
+  that must be manually mounted inside the VM after `setup_tenant.yml` runs. Cirros
+  cloud-init is too limited to handle this today; options to explore: switch to a
+  cloud-init-capable image (e.g., minimal Alpine/Fedora), or add a post-provision playbook
+  that SSHes in and runs `mkfs` + `mount` + `/etc/fstab` entry. Until then,
+  `os-mount-datavol.sh` is scp'd in and run by hand.
+- **Floating IP access for IR VM2, SEL VM2, DB2** — no floating IPs today; reaching these
+  VMs for manual steps requires hopping through another VM in the same network.
+- **Snapshot content verification** — `setup_trilio.yml` waits for snapshot `available`
+  status only; a deeper check (e.g., snapshot size > 0) would catch silent failures before
+  demo day.
+- **Inject file before snapshot** — to make restores visually convincing, a known file
+  (e.g., a timestamped marker or sample dataset) is manually scp'd into target VMs before
+  triggering the snapshot. `setup_trilio.yml` should automate this: SSH into each VM after
+  mount, write a recognizable file, then proceed to snapshot.
+- **Idempotent re-run of `setup_trilio.yml`** — errors if a workload already exists; add a
+  "skip if present" guard so the playbook is safe to re-run against a live environment.
+
+---
+
 ## Out of Scope
 
 - Creating shared infrastructure (networks, security groups, images, flavors)
 - Installing or configuring Trilio itself
-- Volume mount automation inside VMs
+- Volume mount automation inside VMs (tracked in TODOs above)
 - HEAT templates
 - CI/CD integration
 
