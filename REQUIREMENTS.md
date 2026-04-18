@@ -68,6 +68,66 @@ setup_trilio.yml       ↔  teardown_trilio.yml
 
 ---
 
+## Planned Application Redesign
+
+> **Status:** Not yet implemented. Implementation will happen on a separate branch.
+> Replaces the four OCR/IR/SEL/DB scenarios with three audience-facing application demos.
+>
+> **All VMs remain Cirros** — the application names (Firewall, AppCluster, PostgreSQL) are
+> demo labels only. Real application images are out of scope for this lab cluster.
+
+### New Demo Scenarios
+
+| Demo | App Type | VMs | Purpose |
+|------|----------|-----|---------|
+| Firewall | Virtual firewall (VNF) | 1 | One-Click Restore of a stateful security appliance |
+| AppCluster | 3-tier web application | 3 (LB + frontend + backend) | Multi-VM crash-consistent backup; selective restore across tiers |
+| PostgreSQL | Primary/replica database | 2 | Crash-consistent DB backup; restore across both nodes |
+
+### New Resource Naming
+
+#### Instances
+
+| Demo | VM Name | Flavor | Network(s) | Floating IP |
+|------|---------|--------|------------|-------------|
+| Firewall | `vincent-fw-vm` | m1.tiny | prod-network | yes |
+| AppCluster LB | `vincent-app-lb` | m1.tiny | prod-network | yes |
+| AppCluster FE | `vincent-app-fe` | m1.tiny | prod-network | no |
+| AppCluster BE | `vincent-app-be` | m1.tiny | data-network | no |
+| PostgreSQL Primary | `vincent-pg-primary` | m1.tiny | prod-network + data-network | yes |
+| PostgreSQL Replica | `vincent-pg-replica` | m1.tiny | data-network | no |
+
+#### Volumes
+
+| Demo | Boot Volume (1G) | Data Volume (4G) |
+|------|------------------|------------------|
+| Firewall | `vincent-fw-bootvol` | `vincent-fw-datavol` (config/state) |
+| AppCluster LB | `vincent-app-lb-bootvol` | — |
+| AppCluster FE | `vincent-app-fe-bootvol` | — |
+| AppCluster BE | `vincent-app-be-bootvol` | `vincent-app-be-datavol` |
+| PostgreSQL Primary | `vincent-pg-primary-bootvol` | `vincent-pg-primary-datavol` |
+| PostgreSQL Replica | `vincent-pg-replica-bootvol` | `vincent-pg-replica-datavol` |
+
+#### Ports
+
+| Demo | Port Name | Network |
+|------|-----------|---------|
+| PostgreSQL Primary | `vincent-pg-primary-data-port` | data-network |
+
+#### Trilio Resources
+
+| Demo | Workload Name | Instances | Backup Target | Snapshot Name |
+|------|---------------|-----------|---------------|---------------|
+| Firewall | `vincent-firewall-workload` | vincent-fw-vm | S3 | `vincent-firewall-snapshot` |
+| AppCluster | `vincent-appcluster-workload` | vincent-app-lb + vincent-app-fe + vincent-app-be | NFS | `vincent-appcluster-snapshot` |
+| PostgreSQL | `vincent-postgresql-workload` | vincent-pg-primary + vincent-pg-replica | S3 | `vincent-postgresql-snapshot` |
+
+### New Tags
+
+`fw`, `app`, `pg` — replacing `ocr`, `ir`, `sel`, `db`.
+
+---
+
 ## Prerequisite Shared Infrastructure
 
 The following resources must exist in the OpenStack project before running any playbook.
