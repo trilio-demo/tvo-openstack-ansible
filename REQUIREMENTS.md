@@ -65,7 +65,7 @@ audience-facing demo labels. Real application images are out of scope for this l
 | Demo | App Type | Tag | VMs | Purpose |
 |------|----------|-----|-----|---------|
 | Firewall | Virtual firewall (VNF) | `fw` | 1 | One-Click Restore of a stateful security appliance |
-| WebApp | 3-tier web application | `app` | 3 (LB + frontend + backend) | Multi-VM crash-consistent backup; selective restore across tiers |
+| WebApp | 3-tier web application | `app` | 3 (LB + frontend + backend) | Selective Restore and In-Place Restore demos |
 | Database | Primary/replica database | `pg` | 2 | Crash-consistent DB backup; restore across both nodes |
 
 ---
@@ -103,7 +103,7 @@ Resource names are descriptive by default (e.g., `firewall-vm`, `webapp-lb`). Se
 | WebApp LB | `webapp-lb` | m1.tiny | prod-network | yes |
 | WebApp FE | `webapp-fe` | m1.tiny | prod-network + data-network | no |
 | WebApp BE | `webapp-be` | m1.tiny | data-network | no |
-| Database Primary | `database-primary` | m1.tiny | prod-network + data-network | yes (post-create) |
+| Database Primary | `database-primary` | m1.tiny | prod-network + data-network | yes |
 | Database Replica | `database-replica` | m1.tiny | data-network | no |
 
 ### Volumes
@@ -224,9 +224,9 @@ Tolerates missing workloads and snapshots.
   Alpine/Fedora), or add a post-provision playbook that SSHes in and runs `mkfs` +
   `mount` + `/etc/fstab` entry. Until then, `os-mount-datavol.sh` is scp'd in and
   run by hand.
-- **Floating IP access for WebApp FE/BE, Database Replica** — no floating IPs
-  today; reaching these VMs for manual steps requires hopping through another VM in
-  the same network.
+- **Floating IP access for WebApp FE/BE, Database Replica** — no floating IPs on
+  these VMs; reaching them for manual steps requires hopping through another VM in
+  the same network. (Database Primary gets a FIP automatically via post-create CLI step.)
 - **Snapshot content verification** — `setup_trilio.yml` waits for snapshot `available`
   status only; a deeper check (e.g., snapshot size > 0) would catch silent failures before
   demo day.
