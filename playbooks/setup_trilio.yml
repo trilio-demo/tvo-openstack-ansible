@@ -7,10 +7,9 @@
 #   ansible-playbook playbooks/setup_trilio.yml
 #
 # Usage — single demo (tag filter):
-#   ansible-playbook playbooks/setup_trilio.yml --tags ocr
-#   ansible-playbook playbooks/setup_trilio.yml --tags ir
-#   ansible-playbook playbooks/setup_trilio.yml --tags sel
-#   ansible-playbook playbooks/setup_trilio.yml --tags db
+#   ansible-playbook playbooks/setup_trilio.yml --tags fw
+#   ansible-playbook playbooks/setup_trilio.yml --tags app
+#   ansible-playbook playbooks/setup_trilio.yml --tags pg
 #
 # Note: --check mode is not meaningful for this playbook (all tasks are
 # command/shell; no idempotent Ansible modules to simulate).
@@ -67,41 +66,32 @@
         msg: "VM name → ID map: {{ vm_id_map }}"
       tags: always
 
-    # ── OCR workload ───────────────────────────────────────────────────────────
+    # ── Firewall workload ──────────────────────────────────────────────────────
 
-    - name: Setup OCR workload
+    - name: Setup Firewall workload
       ansible.builtin.include_tasks:
         file: tasks/setup_workload.yml
       vars:
-        workload: "{{ trilio_workloads | selectattr('demo_tag', 'equalto', 'ocr') | first }}"
-      tags: ocr
+        workload: "{{ trilio_workloads | selectattr('demo_tag', 'equalto', 'fw') | first }}"
+      tags: fw
 
-    # ── IR workload ────────────────────────────────────────────────────────────
+    # ── WebApp workload ───────────────────────────────────────────────────────
 
-    - name: Setup IR workload
+    - name: Setup WebApp workload
       ansible.builtin.include_tasks:
         file: tasks/setup_workload.yml
       vars:
-        workload: "{{ trilio_workloads | selectattr('demo_tag', 'equalto', 'ir') | first }}"
-      tags: ir
+        workload: "{{ trilio_workloads | selectattr('demo_tag', 'equalto', 'app') | first }}"
+      tags: app
 
-    # ── SEL workload ───────────────────────────────────────────────────────────
+    # ── Database workload ─────────────────────────────────────────────────────
 
-    - name: Setup SEL workload
+    - name: Setup Database workload
       ansible.builtin.include_tasks:
         file: tasks/setup_workload.yml
       vars:
-        workload: "{{ trilio_workloads | selectattr('demo_tag', 'equalto', 'sel') | first }}"
-      tags: sel
-
-    # ── DB workload ────────────────────────────────────────────────────────────
-
-    - name: Setup DB workload
-      ansible.builtin.include_tasks:
-        file: tasks/setup_workload.yml
-      vars:
-        workload: "{{ trilio_workloads | selectattr('demo_tag', 'equalto', 'db') | first }}"
-      tags: db
+        workload: "{{ trilio_workloads | selectattr('demo_tag', 'equalto', 'pg') | first }}"
+      tags: pg
 
     # ── Final summary ──────────────────────────────────────────────────────────
 

@@ -4,6 +4,18 @@ os_cloud: openstack                          # cloud name in clouds.yaml
 os_project_id: <your-project-uuid>           # openstack project show <name> -f value -c id
 os_project_name: <your-project-name>
 
+# ── Resource naming ───────────────────────────────────────────────────────────
+# demo_prefix: prepended to all managed resources.  Default is empty —
+#   resources are named firewall-vm, webapp-lb, database-primary, etc.
+#   Set to e.g. "mylab-" (include trailing dash) to namespace them.
+# demo_prefix: ""
+
+# demo_keypair: keypair injected into all VMs.  Independent of demo_prefix.
+# demo_keypair: my-keypair-name
+
+# demo_sg: security group applied to all VMs and ports.
+# demo_sg: my-security-group
+
 # ── Trilio workload definitions ───────────────────────────────────────────────
 # instance_names: VM names as they exist in your OpenStack project.
 #
@@ -12,40 +24,32 @@ os_project_name: <your-project-name>
 # Set each workload to the appropriate S3 or NFS target type ID for your environment.
 #
 # demo_tag: used to run a single demo scenario:
-#   ansible-playbook playbooks/setup_trilio.yml -e target_demo=ocr
+#   ansible-playbook playbooks/setup_trilio.yml --tags fw
 
 trilio_workloads:
-  - name: vincent-ocr-workload
-    description: "Prepared for One-Click Restore (OCR) demo"
-    demo_tag: ocr
+  - name: firewall-workload
+    description: "Virtual firewall appliance — One-Click Restore demo"
+    demo_tag: fw
     instance_names:
-      - vincent-ocr-vm
+      - firewall-vm
     backup_target_type: <s3-backup-target-type-id>
-    snapshot_name: vincent-ocr-snapshot
+    snapshot_name: firewall-snapshot
 
-  - name: vincent-ir-workload
-    description: "Prepared for In-Place Restore (IR) demo"
-    demo_tag: ir
+  - name: webapp-workload
+    description: "3-tier web application — Selective and In-Place Restore demos"
+    demo_tag: app
     instance_names:
-      - vincent-ir-vm1
-      - vincent-ir-vm2
+      - webapp-lb
+      - webapp-fe
+      - webapp-be
     backup_target_type: <nfs-backup-target-type-id>
-    snapshot_name: vincent-ir-snapshot
+    snapshot_name: webapp-snapshot
 
-  - name: vincent-sel-workload
-    description: "Prepared for Selective Restore (SEL) demo"
-    demo_tag: sel
+  - name: database-workload
+    description: "Primary/replica database — crash-consistent DB backup demo"
+    demo_tag: pg
     instance_names:
-      - vincent-sel-vm1
-      - vincent-sel-vm2
-    backup_target_type: <nfs-backup-target-type-id>
-    snapshot_name: vincent-sel-snapshot
-
-  - name: vincent-db-workload
-    description: "Prepared for DB backup demo"
-    demo_tag: db
-    instance_names:
-      - vincent-db1-vm
-      - vincent-db2-vm
+      - database-primary
+      - database-replica
     backup_target_type: <s3-backup-target-type-id>
-    snapshot_name: vincent-db-snapshot
+    snapshot_name: database-snapshot

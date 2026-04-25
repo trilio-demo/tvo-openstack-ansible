@@ -59,72 +59,14 @@ setup_trilio.yml       ↔  teardown_trilio.yml
 
 ## Demo Scenarios
 
-| Demo | VMs | Volumes | Networks | Purpose |
-|------|-----|---------|----------|---------|
-| OCR  | 1   | 2       | 1        | One-Click Restore — delete instance + volumes, restore from snapshot |
-| IR   | 2   | 3       | 1        | In-Place Restore of data volume; also used for File Browse |
-| SEL  | 2   | 1 each  | 2        | Selective Restore — change network + flavor, restore original state |
-| DB   | 2   | 3       | 2        | Dual-network and dual-volume instances for DB backup demo |
+All VMs run Cirros — the application names (Firewall, WebApp, Database) are
+audience-facing demo labels. Real application images are out of scope for this lab cluster.
 
----
-
-## Planned Application Redesign
-
-> **Status:** Not yet implemented. Implementation will happen on a separate branch.
-> Replaces the four OCR/IR/SEL/DB scenarios with three audience-facing application demos.
->
-> **All VMs remain Cirros** — the application names (Firewall, AppCluster, PostgreSQL) are
-> demo labels only. Real application images are out of scope for this lab cluster.
-
-### New Demo Scenarios
-
-| Demo | App Type | VMs | Purpose |
-|------|----------|-----|---------|
-| Firewall | Virtual firewall (VNF) | 1 | One-Click Restore of a stateful security appliance |
-| AppCluster | 3-tier web application | 3 (LB + frontend + backend) | Multi-VM crash-consistent backup; selective restore across tiers |
-| PostgreSQL | Primary/replica database | 2 | Crash-consistent DB backup; restore across both nodes |
-
-### New Resource Naming
-
-#### Instances
-
-| Demo | VM Name | Flavor | Network(s) | Floating IP |
-|------|---------|--------|------------|-------------|
-| Firewall | `vincent-fw-vm` | m1.tiny | prod-network | yes |
-| AppCluster LB | `vincent-app-lb` | m1.tiny | prod-network | yes |
-| AppCluster FE | `vincent-app-fe` | m1.tiny | prod-network | no |
-| AppCluster BE | `vincent-app-be` | m1.tiny | data-network | no |
-| PostgreSQL Primary | `vincent-pg-primary` | m1.tiny | prod-network + data-network | yes |
-| PostgreSQL Replica | `vincent-pg-replica` | m1.tiny | data-network | no |
-
-#### Volumes
-
-| Demo | Boot Volume (1G) | Data Volume (4G) |
-|------|------------------|------------------|
-| Firewall | `vincent-fw-bootvol` | `vincent-fw-datavol` (config/state) |
-| AppCluster LB | `vincent-app-lb-bootvol` | — |
-| AppCluster FE | `vincent-app-fe-bootvol` | — |
-| AppCluster BE | `vincent-app-be-bootvol` | `vincent-app-be-datavol` |
-| PostgreSQL Primary | `vincent-pg-primary-bootvol` | `vincent-pg-primary-datavol` |
-| PostgreSQL Replica | `vincent-pg-replica-bootvol` | `vincent-pg-replica-datavol` |
-
-#### Ports
-
-| Demo | Port Name | Network |
-|------|-----------|---------|
-| PostgreSQL Primary | `vincent-pg-primary-data-port` | data-network |
-
-#### Trilio Resources
-
-| Demo | Workload Name | Instances | Backup Target | Snapshot Name |
-|------|---------------|-----------|---------------|---------------|
-| Firewall | `vincent-firewall-workload` | vincent-fw-vm | S3 | `vincent-firewall-snapshot` |
-| AppCluster | `vincent-appcluster-workload` | vincent-app-lb + vincent-app-fe + vincent-app-be | NFS | `vincent-appcluster-snapshot` |
-| PostgreSQL | `vincent-postgresql-workload` | vincent-pg-primary + vincent-pg-replica | S3 | `vincent-postgresql-snapshot` |
-
-### New Tags
-
-`fw`, `app`, `pg` — replacing `ocr`, `ir`, `sel`, `db`.
+| Demo | App Type | Tag | VMs | Purpose |
+|------|----------|-----|-----|---------|
+| Firewall | Virtual firewall (VNF) | `fw` | 1 | One-Click Restore of a stateful security appliance |
+| WebApp | 3-tier web application | `app` | 3 (LB + frontend + backend) | Multi-VM crash-consistent backup; selective restore across tiers |
+| Database | Primary/replica database | `pg` | 2 | Crash-consistent DB backup; restore across both nodes |
 
 ---
 
@@ -136,12 +78,12 @@ They are **not** created or deleted by these playbooks.
 | Resource | Type | Notes |
 |----------|------|-------|
 | `prod-network` | Network | Primary tenant network for all VMs |
-| `data-network` | Network | Secondary network for DB and SEL demos |
+| `data-network` | Network | Secondary network for WebApp BE and Database demos |
 | External / provider network | Network | Source of floating IPs |
 | `vbsg-ssh` | Security group | Must allow SSH inbound; applied to all VMs |
 | `vincent-ansible-key` | Keypair | Injected into all VMs — see setup step 2 |
-| S3 backup target | Trilio backup target | Used by OCR and DB workloads |
-| NFS backup target | Trilio backup target | Used by IR and SEL workloads |
+| S3 backup target | Trilio backup target | Used by Firewall and Database workloads |
+| NFS backup target | Trilio backup target | Used by WebApp workload |
 | `cirros` | Image | Used for all demo VMs |
 | `m1.tiny` | Flavor | Used for all demo VMs |
 
@@ -149,54 +91,52 @@ They are **not** created or deleted by these playbooks.
 
 ## Resource Naming
 
-All Ansible-managed resources use the `vincent-` prefix. Teardown targets `vincent-*`
-resources only — any other resources in the project are never touched.
+Resource names are descriptive by default (e.g., `firewall-vm`, `webapp-lb`). Set
+`demo_prefix` in `vars/main.yml` to namespace them (e.g., `"mylab-"` produces
+`mylab-firewall-vm`). Teardown only deletes resources matching these names.
 
 ### Instances
 
-| Demo | VM Name | Flavor | Network(s) |
-|------|---------|--------|------------|
-| OCR | `vincent-ocr-vm` | m1.tiny | prod-network |
-| IR VM1 | `vincent-ir-vm1` | m1.tiny | prod-network |
-| IR VM2 | `vincent-ir-vm2` | m1.tiny | prod-network |
-| SEL VM1 | `vincent-sel-vm1` | m1.tiny | prod-network |
-| SEL VM2 | `vincent-sel-vm2` | m1.tiny | data-network |
-| DB1 | `vincent-db1-vm` | m1.tiny | prod-network + data-network |
-| DB2 | `vincent-db2-vm` | m1.tiny | prod-network |
+| Demo | VM Name | Flavor | Network(s) | Floating IP |
+|------|---------|--------|------------|-------------|
+| Firewall | `firewall-vm` | m1.tiny | prod-network | yes |
+| WebApp LB | `webapp-lb` | m1.tiny | prod-network | yes |
+| WebApp FE | `webapp-fe` | m1.tiny | prod-network + data-network | no |
+| WebApp BE | `webapp-be` | m1.tiny | data-network | no |
+| Database Primary | `database-primary` | m1.tiny | prod-network + data-network | yes (post-create) |
+| Database Replica | `database-replica` | m1.tiny | data-network | no |
 
 ### Volumes
 
 | Demo | Boot Volume (1G) | Data Volume (4G) |
 |------|------------------|------------------|
-| OCR | `vincent-ocr-bootvol` | `vincent-ocr-datavol` |
-| IR VM1 | `vincent-ir-vm1-bootvol` | `vincent-ir-vm1-datavol` |
-| IR VM2 | `vincent-ir-vm2-bootvol` | — |
-| SEL VM1 | `vincent-sel-vm1-bootvol` | — |
-| SEL VM2 | `vincent-sel-vm2-bootvol` | — |
-| DB1 | `vincent-db1-bootvol` | — |
-| DB2 | `vincent-db2-bootvol` | `vincent-db2-datavol` |
+| Firewall | `firewall-bootvol` | `firewall-datavol` |
+| WebApp LB | `webapp-lb-bootvol` | — |
+| WebApp FE | `webapp-fe-bootvol` | — |
+| WebApp BE | `webapp-be-bootvol` | `webapp-be-datavol` |
+| Database Primary | `database-primary-bootvol` | `database-primary-datavol` |
+| Database Replica | `database-replica-bootvol` | `database-replica-datavol` |
 
 ### Ports
 
-| Demo | Port Name |
-|------|-----------|
-| DB1 | `vincent-db1-data-port` |
+| Demo | Port Name | Network |
+|------|-----------|---------|
+| Database Primary | `database-primary-data-port` | data-network |
 
 ### Trilio Resources
 
 | Demo | Workload Name | Instances | Backup Target | Snapshot Name |
 |------|---------------|-----------|---------------|---------------|
-| OCR | `vincent-ocr-workload` | vincent-ocr-vm | S3 | `vincent-ocr-snapshot` |
-| IR | `vincent-ir-workload` | vincent-ir-vm1 + vincent-ir-vm2 | NFS | `vincent-ir-snapshot` |
-| SEL | `vincent-sel-workload` | vincent-sel-vm1 + vincent-sel-vm2 | NFS | `vincent-sel-snapshot` |
-| DB | `vincent-db-workload` | vincent-db1-vm + vincent-db2-vm | S3 | `vincent-db-snapshot` |
+| Firewall | `firewall-workload` | firewall-vm | S3 | `firewall-snapshot` |
+| WebApp | `webapp-workload` | webapp-lb + webapp-fe + webapp-be | NFS | `webapp-snapshot` |
+| Database | `database-workload` | database-primary + database-replica | S3 | `database-snapshot` |
 
 ---
 
 ## Playbook Design
 
 ### `setup_tenant.yml`
-Create all `vincent-*` OpenStack resources from scratch.
+Create all demo OpenStack resources from scratch.
 
 **Phase 1 — Prerequisite checks (fail-fast):**
 - Networks exist: `prod-network`, `data-network` (project-scoped)
@@ -209,18 +149,16 @@ Create all `vincent-*` OpenStack resources from scratch.
 
 | Demo | Resources |
 |------|-----------|
-| OCR | boot vol + data vol + VM (prod-network, floating IP) |
-| IR | boot vol + data vol + VM1 (floating IP); boot vol + VM2 (no floating IP) |
-| SEL | boot vol + VM1 on prod-network (floating IP); boot vol + VM2 on data-network (no floating IP) |
-| DB1 | boot vol + port on data-network + VM on prod+data (floating IP) |
-| DB2 | boot vol + data vol + VM (prod-network, no floating IP) |
+| Firewall | boot vol + data vol + VM (prod-network, floating IP) |
+| WebApp | 3 boot vols + BE data vol + LB (floating IP) + FE on prod+data (no FIP) + BE on data-network (no FIP) |
+| Database | 2 boot vols + 2 data vols + port on data-network + Primary on prod+data (FIP via post-create) + Replica on data-network (no FIP) |
 
 **Phase 3 — Verify:** all VMs reach ACTIVE state.
 
 ---
 
 ### `teardown_tenant.yml`
-Delete all `vincent-*` OpenStack resources.
+Delete all demo OpenStack resources.
 
 1. Delete servers (wait for DELETED before proceeding)
 2. Delete data volumes
@@ -244,10 +182,11 @@ Create Trilio workloads and take initial full snapshots.
 ---
 
 ### `teardown_trilio.yml`
-Delete all `vincent-*` Trilio workloads and snapshots.
+Delete Trilio workloads and snapshots. Supports per-demo tag filtering.
 
-1. List all workloads; for each: delete all snapshots (wait for completion)
-2. Delete each workload (wait for completion)
+1. List all workloads in project
+2. For each targeted demo (fw/app/pg): find matching workload, delete its snapshots, wait, delete workload
+3. Running without `--tags` deletes all three workloads
 
 Tolerates missing workloads and snapshots.
 
@@ -262,7 +201,7 @@ Tolerates missing workloads and snapshots.
 - **Auth**: `clouds.yaml` + `secure.yaml`; never source RC files
 - **Trilio API**: `openstack workloadmgr` CLI (workloadmgrclient package) — no Ansible
   collection exists for TrilioVault
-- **Tags**: `ocr`, `ir`, `sel`, `db` on all tasks — run a single demo with `--tags <demo>`
+- **Tags**: `fw`, `app`, `pg` on all tasks — run a single demo with `--tags <demo>`
 - **Python interpreter**: tenant playbooks set `ansible_python_interpreter` via
   `VIRTUAL_ENV` env var; trilio playbooks use a hardcoded `openstack_bin` path —
   both ensure the venv Python is used rather than the system Python
@@ -278,14 +217,16 @@ Tolerates missing workloads and snapshots.
 
 ## TODOs
 
-- **Automate data volume mounting** — OCR, IR VM1, and DB2 each have a 4G data volume
-  that must be manually mounted inside the VM after `setup_tenant.yml` runs. Cirros
-  cloud-init is too limited to handle this today; options to explore: switch to a
-  cloud-init-capable image (e.g., minimal Alpine/Fedora), or add a post-provision playbook
-  that SSHes in and runs `mkfs` + `mount` + `/etc/fstab` entry. Until then,
-  `os-mount-datavol.sh` is scp'd in and run by hand.
-- **Floating IP access for IR VM2, SEL VM2, DB2** — no floating IPs today; reaching these
-  VMs for manual steps requires hopping through another VM in the same network.
+- **Automate data volume mounting** — Firewall, WebApp BE, Database Primary, and
+  Database Replica each have a 4G data volume that must be manually mounted inside
+  the VM after `setup_tenant.yml` runs. Cirros cloud-init is too limited to handle this
+  today; options to explore: switch to a cloud-init-capable image (e.g., minimal
+  Alpine/Fedora), or add a post-provision playbook that SSHes in and runs `mkfs` +
+  `mount` + `/etc/fstab` entry. Until then, `os-mount-datavol.sh` is scp'd in and
+  run by hand.
+- **Floating IP access for WebApp FE/BE, Database Replica** — no floating IPs
+  today; reaching these VMs for manual steps requires hopping through another VM in
+  the same network.
 - **Snapshot content verification** — `setup_trilio.yml` waits for snapshot `available`
   status only; a deeper check (e.g., snapshot size > 0) would catch silent failures before
   demo day.

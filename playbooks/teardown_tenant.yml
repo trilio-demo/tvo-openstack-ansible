@@ -1,6 +1,6 @@
 ---
 # teardown_tenant.yml
-# Delete all vincent-* OpenStack tenant resources: servers, volumes, ports.
+# Delete all demo OpenStack tenant resources: servers, volumes, ports.
 # Does NOT touch networks, security groups, keypairs, images, or backup targets.
 # Safe to run against a partially-built environment — missing resources are skipped.
 #
@@ -8,12 +8,11 @@
 #   ansible-playbook playbooks/teardown_tenant.yml
 #
 # Usage — single demo:
-#   ansible-playbook playbooks/teardown_tenant.yml --tags ocr
-#   ansible-playbook playbooks/teardown_tenant.yml --tags ir
-#   ansible-playbook playbooks/teardown_tenant.yml --tags sel
-#   ansible-playbook playbooks/teardown_tenant.yml --tags db
+#   ansible-playbook playbooks/teardown_tenant.yml --tags fw
+#   ansible-playbook playbooks/teardown_tenant.yml --tags app
+#   ansible-playbook playbooks/teardown_tenant.yml --tags pg
 
-- name: Teardown vincent-* tenant resources
+- name: Teardown demo tenant resources
   hosts: localhost
   connection: local
   gather_facts: false
@@ -30,142 +29,121 @@
     # Wait for each server to reach DELETED before moving on — volumes cannot
     # be deleted while still attached to a running or shutoff instance.
 
-    - name: Delete OCR server
+    - name: Delete Firewall server
       openstack.cloud.server:
         cloud: "{{ os_cloud }}"
-        name: vincent-ocr-vm
+        name: "{{ demo_prefix }}firewall-vm"
         state: absent
         wait: true
       failed_when: false
-      tags: ocr
+      tags: fw
 
-    - name: Delete IR servers
+    - name: Delete WebApp servers
       openstack.cloud.server:
         cloud: "{{ os_cloud }}"
         name: "{{ item }}"
         state: absent
         wait: true
       loop:
-        - vincent-ir-vm1
-        - vincent-ir-vm2
+        - "{{ demo_prefix }}webapp-lb"
+        - "{{ demo_prefix }}webapp-fe"
+        - "{{ demo_prefix }}webapp-be"
       failed_when: false
-      tags: ir
+      tags: app
 
-    - name: Delete SEL servers
+    - name: Delete Database servers
       openstack.cloud.server:
         cloud: "{{ os_cloud }}"
         name: "{{ item }}"
         state: absent
         wait: true
       loop:
-        - vincent-sel-vm1
-        - vincent-sel-vm2
+        - "{{ demo_prefix }}database-primary"
+        - "{{ demo_prefix }}database-replica"
       failed_when: false
-      tags: sel
-
-    - name: Delete DB servers
-      openstack.cloud.server:
-        cloud: "{{ os_cloud }}"
-        name: "{{ item }}"
-        state: absent
-        wait: true
-      loop:
-        - vincent-db1-vm
-        - vincent-db2-vm
-      failed_when: false
-      tags: db
+      tags: pg
 
     # ── Phase 2: Delete data volumes ──────────────────────────────────────────
-    # Data volumes first — no boot dependency.
 
-    - name: Delete OCR data volume
+    - name: Delete Firewall data volume
       openstack.cloud.volume:
         cloud: "{{ os_cloud }}"
-        name: vincent-ocr-datavol
+        name: "{{ demo_prefix }}firewall-datavol"
         state: absent
         wait: true
       failed_when: false
-      tags: ocr
+      tags: fw
 
-    - name: Delete IR data volume
+    - name: Delete WebApp BE data volume
       openstack.cloud.volume:
         cloud: "{{ os_cloud }}"
-        name: vincent-ir-vm1-datavol
+        name: "{{ demo_prefix }}webapp-be-datavol"
         state: absent
         wait: true
       failed_when: false
-      tags: ir
+      tags: app
 
-    - name: Delete DB2 data volume
+    - name: Delete Database data volumes
       openstack.cloud.volume:
         cloud: "{{ os_cloud }}"
-        name: vincent-db2-datavol
+        name: "{{ item }}"
         state: absent
         wait: true
+      loop:
+        - "{{ demo_prefix }}database-primary-datavol"
+        - "{{ demo_prefix }}database-replica-datavol"
       failed_when: false
-      tags: db
+      tags: pg
 
     # ── Phase 3: Delete boot volumes ──────────────────────────────────────────
 
-    - name: Delete OCR boot volume
+    - name: Delete Firewall boot volume
       openstack.cloud.volume:
         cloud: "{{ os_cloud }}"
-        name: vincent-ocr-bootvol
+        name: "{{ demo_prefix }}firewall-bootvol"
         state: absent
         wait: true
       failed_when: false
-      tags: ocr
+      tags: fw
 
-    - name: Delete IR boot volumes
+    - name: Delete WebApp boot volumes
       openstack.cloud.volume:
         cloud: "{{ os_cloud }}"
         name: "{{ item }}"
         state: absent
         wait: true
       loop:
-        - vincent-ir-vm1-bootvol
-        - vincent-ir-vm2-bootvol
+        - "{{ demo_prefix }}webapp-lb-bootvol"
+        - "{{ demo_prefix }}webapp-fe-bootvol"
+        - "{{ demo_prefix }}webapp-be-bootvol"
       failed_when: false
-      tags: ir
+      tags: app
 
-    - name: Delete SEL boot volumes
+    - name: Delete Database boot volumes
       openstack.cloud.volume:
         cloud: "{{ os_cloud }}"
         name: "{{ item }}"
         state: absent
         wait: true
       loop:
-        - vincent-sel-vm1-bootvol
-        - vincent-sel-vm2-bootvol
+        - "{{ demo_prefix }}database-primary-bootvol"
+        - "{{ demo_prefix }}database-replica-bootvol"
       failed_when: false
-      tags: sel
-
-    - name: Delete DB boot volumes
-      openstack.cloud.volume:
-        cloud: "{{ os_cloud }}"
-        name: "{{ item }}"
-        state: absent
-        wait: true
-      loop:
-        - vincent-db1-bootvol
-        - vincent-db2-bootvol
-      failed_when: false
-      tags: db
+      tags: pg
 
     # ── Phase 4: Delete ports ─────────────────────────────────────────────────
-    # Explicit cleanup — port may persist if server deletion left it orphaned.
 
-    - name: Delete DB1 data port
+    - name: Delete Database Primary data port
       openstack.cloud.port:
         cloud: "{{ os_cloud }}"
-        name: vincent-db1-data-port
+        name: "{{ demo_prefix }}database-primary-data-port"
         state: absent
       failed_when: false
-      tags: db
+      tags: pg
 
     # ── Phase 5: Report ───────────────────────────────────────────────────────
 
     - name: Teardown complete
       ansible.builtin.debug:
-        msg: "vincent-* tenant resources deleted."
+        msg: "Demo tenant resources deleted."
       tags: always
