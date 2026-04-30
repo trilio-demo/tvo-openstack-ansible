@@ -1,7 +1,8 @@
 ---
 # tasks/setup_workload.yml
 # Called once per workload via include_tasks.
-# Expects: workload (dict from trilio_workloads), vm_id_map (dict), openstack_bin, os_env
+# Expects: workload (dict from trilio_workloads), vm_id_map (dict), openstack_bin
+# Auth comes from play-level environment (OS_* env vars).
 
 # ── Step 1: Create workload ────────────────────────────────────────────────
 
@@ -12,9 +13,8 @@
       --display-name "{{ workload.name }}"
       --display-description "{{ workload.description }}"
       --instance {{ workload.instance_names | map('extract', vm_id_map) | join(' ') }}
-      --backup-target-type {{ workload.backup_target_type }}
+      {% if workload.backup_target_type | default('') %}--backup-target-type {{ workload.backup_target_type }}{% endif %}
       --manual retention=30
-  environment: "{{ os_env }}"
   tags: always
 
 # ── Step 2: Wait for workload to reach available ───────────────────────────
@@ -22,7 +22,6 @@
 - name: "Wait for workload {{ workload.name }} to reach available"
   ansible.builtin.command:
     cmd: "{{ openstack_bin }} workloadmgr workload list -f json"
-  environment: "{{ os_env }}"
   register: workload_avail_poll
   until: >-
     ((workload_avail_poll.stdout or '[]') | from_json)
@@ -52,7 +51,6 @@
       {{ workload_id }}
       --full
       --display-name "{{ workload.snapshot_name }}"
-  environment: "{{ os_env }}"
   tags: always
 
 # ── Step 5: Wait for snapshot to reach available ───────────────────────────
@@ -63,7 +61,6 @@
       {{ openstack_bin }} workloadmgr workload snapshot list
       --workload_id {{ workload_id }}
       -f json
-  environment: "{{ os_env }}"
   register: snap_poll
   until: >-
     ((snap_poll.stdout or '[]') | from_json)

@@ -18,10 +18,23 @@
   gather_facts: false
   vars_files:
     - ../vars/main.yml
+    - ../vars/vault.yml
   vars:
     ansible_python_interpreter: "{{ lookup('env', 'VIRTUAL_ENV') }}/bin/python3"
   environment:
-    OS_CLIENT_CONFIG_FILE: "{{ playbook_dir }}/../clouds.yaml"
+    OS_AUTH_URL: "{{ os_auth_url }}"
+    OS_USERNAME: "{{ os_username }}"
+    OS_PASSWORD: "{{ vault_os_password }}"
+    OS_PROJECT_ID: "{{ os_project_id }}"
+    OS_PROJECT_NAME: "{{ os_project_name }}"
+    OS_USER_DOMAIN_NAME: "{{ os_user_domain_name }}"
+    OS_PROJECT_DOMAIN_NAME: "{{ os_project_domain_name }}"
+    OS_REGION_NAME: "{{ os_region_name }}"
+    OS_INTERFACE: "{{ os_interface }}"
+    OS_IDENTITY_API_VERSION: "3"
+  module_defaults:
+    group/openstack.cloud.openstack:
+      validate_certs: false
 
   tasks:
 
@@ -31,7 +44,6 @@
 
     - name: Delete Firewall server
       openstack.cloud.server:
-        cloud: "{{ os_cloud }}"
         name: "{{ demo_prefix }}firewall-vm"
         state: absent
         wait: true
@@ -40,7 +52,6 @@
 
     - name: Delete WebApp servers
       openstack.cloud.server:
-        cloud: "{{ os_cloud }}"
         name: "{{ item }}"
         state: absent
         wait: true
@@ -53,7 +64,6 @@
 
     - name: Delete Database servers
       openstack.cloud.server:
-        cloud: "{{ os_cloud }}"
         name: "{{ item }}"
         state: absent
         wait: true
@@ -67,7 +77,6 @@
 
     - name: Delete Firewall data volume
       openstack.cloud.volume:
-        cloud: "{{ os_cloud }}"
         name: "{{ demo_prefix }}firewall-datavol"
         state: absent
         wait: true
@@ -76,7 +85,6 @@
 
     - name: Delete WebApp BE data volume
       openstack.cloud.volume:
-        cloud: "{{ os_cloud }}"
         name: "{{ demo_prefix }}webapp-be-datavol"
         state: absent
         wait: true
@@ -85,7 +93,6 @@
 
     - name: Delete Database data volumes
       openstack.cloud.volume:
-        cloud: "{{ os_cloud }}"
         name: "{{ item }}"
         state: absent
         wait: true
@@ -99,7 +106,6 @@
 
     - name: Delete Firewall boot volume
       openstack.cloud.volume:
-        cloud: "{{ os_cloud }}"
         name: "{{ demo_prefix }}firewall-bootvol"
         state: absent
         wait: true
@@ -108,7 +114,6 @@
 
     - name: Delete WebApp boot volumes
       openstack.cloud.volume:
-        cloud: "{{ os_cloud }}"
         name: "{{ item }}"
         state: absent
         wait: true
@@ -121,7 +126,6 @@
 
     - name: Delete Database boot volumes
       openstack.cloud.volume:
-        cloud: "{{ os_cloud }}"
         name: "{{ item }}"
         state: absent
         wait: true
@@ -135,7 +139,6 @@
 
     - name: Delete Database Primary data port
       openstack.cloud.port:
-        cloud: "{{ os_cloud }}"
         name: "{{ demo_prefix }}database-primary-data-port"
         state: absent
       failed_when: false

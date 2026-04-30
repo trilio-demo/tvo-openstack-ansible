@@ -1,0 +1,6 @@
+---
+# Copy to vars/vault.yml and replace the placeholder with your real password.
+# vars/vault.yml is gitignored. To encrypt it later:
+#   ansible-vault encrypt vars/vault.yml
+# and run plays with --ask-vault-pass (or a vault password file).
+vault_os_password: "REPLACE_WITH_OPENSTACK_PASSWORD"

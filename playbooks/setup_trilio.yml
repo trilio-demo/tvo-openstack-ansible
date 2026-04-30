@@ -19,12 +19,26 @@
   connection: local
   gather_facts: false
   vars:
-    openstack_bin: "{{ playbook_dir }}/../.venv/bin/openstack"
-    os_env:
-      OS_CLOUD: "{{ os_cloud }}"
-      OS_CLIENT_CONFIG_FILE: "{{ playbook_dir }}/../clouds.yaml"
+    # --insecure is required for workloadmgr subcommands (the workloadmgrclient
+    # plugin does not honor verify=false).
+    openstack_bin: "{{ playbook_dir }}/../.venv/bin/openstack --insecure"
   vars_files:
     - ../vars/main.yml
+    - ../vars/vault.yml
+  environment:
+    OS_AUTH_URL: "{{ os_auth_url }}"
+    OS_USERNAME: "{{ os_username }}"
+    OS_PASSWORD: "{{ vault_os_password }}"
+    OS_PROJECT_ID: "{{ os_project_id }}"
+    OS_PROJECT_NAME: "{{ os_project_name }}"
+    OS_USER_DOMAIN_NAME: "{{ os_user_domain_name }}"
+    OS_PROJECT_DOMAIN_NAME: "{{ os_project_domain_name }}"
+    OS_REGION_NAME: "{{ os_region_name }}"
+    OS_INTERFACE: "{{ os_interface }}"
+    OS_IDENTITY_API_VERSION: "3"
+  module_defaults:
+    group/openstack.cloud.openstack:
+      validate_certs: false
 
   tasks:
 
@@ -39,7 +53,6 @@
     - name: Look up VM ID for each instance name
       ansible.builtin.command:
         cmd: "{{ openstack_bin }} server show {{ item }} -f json"
-      environment: "{{ os_env }}"
       loop: "{{ all_instance_names }}"
       loop_control:
         label: "{{ item }}"
@@ -98,7 +111,6 @@
     - name: Show final workload state
       ansible.builtin.command:
         cmd: "{{ openstack_bin }} workloadmgr workload list"
-      environment: "{{ os_env }}"
       register: final_state
       changed_when: false
       tags: always

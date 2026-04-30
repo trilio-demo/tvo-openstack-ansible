@@ -19,12 +19,26 @@
   connection: local
   gather_facts: false
   vars:
-    openstack_bin: "{{ playbook_dir }}/../.venv/bin/openstack"
-    os_env:
-      OS_CLOUD: "{{ os_cloud }}"
-      OS_CLIENT_CONFIG_FILE: "{{ playbook_dir }}/../clouds.yaml"
+    # --insecure is required for workloadmgr subcommands (the workloadmgrclient
+    # plugin does not honor verify=false).
+    openstack_bin: "{{ playbook_dir }}/../.venv/bin/openstack --insecure"
   vars_files:
     - ../vars/main.yml
+    - ../vars/vault.yml
+  environment:
+    OS_AUTH_URL: "{{ os_auth_url }}"
+    OS_USERNAME: "{{ os_username }}"
+    OS_PASSWORD: "{{ vault_os_password }}"
+    OS_PROJECT_ID: "{{ os_project_id }}"
+    OS_PROJECT_NAME: "{{ os_project_name }}"
+    OS_USER_DOMAIN_NAME: "{{ os_user_domain_name }}"
+    OS_PROJECT_DOMAIN_NAME: "{{ os_project_domain_name }}"
+    OS_REGION_NAME: "{{ os_region_name }}"
+    OS_INTERFACE: "{{ os_interface }}"
+    OS_IDENTITY_API_VERSION: "3"
+  module_defaults:
+    group/openstack.cloud.openstack:
+      validate_certs: false
 
   tasks:
 
@@ -33,7 +47,6 @@
     - name: List all workloads in project
       ansible.builtin.command:
         cmd: "{{ openstack_bin }} workloadmgr workload list -f json"
-      environment: "{{ os_env }}"
       register: workload_list_raw
       changed_when: false
       tags: always
@@ -70,7 +83,6 @@
     - name: Get Firewall snapshots
       ansible.builtin.command:
         cmd: "{{ openstack_bin }} workloadmgr workload snapshot list --workload_id {{ item.ID }} -f json"
-      environment: "{{ os_env }}"
       loop: "{{ fw_workloads }}"
       loop_control:
         label: "{{ item.Name }}"
@@ -87,7 +99,6 @@
     - name: Delete Firewall snapshots
       ansible.builtin.command:
         cmd: "{{ openstack_bin }} workloadmgr workload snapshot delete {{ item.ID }}"
-      environment: "{{ os_env }}"
       loop: "{{ fw_snapshots }}"
       loop_control:
         label: "{{ item.Name }} ({{ item.ID }})"
@@ -97,7 +108,6 @@
     - name: Wait for Firewall workload to return to available
       ansible.builtin.command:
         cmd: "{{ openstack_bin }} workloadmgr workload list -f json"
-      environment: "{{ os_env }}"
       register: fw_status_poll
       until: >-
         ((fw_status_poll.stdout or '[]') | from_json)
@@ -115,7 +125,6 @@
     - name: Delete Firewall workload
       ansible.builtin.command:
         cmd: "{{ openstack_bin }} workloadmgr workload delete {{ item.ID }}"
-      environment: "{{ os_env }}"
       loop: "{{ fw_workloads }}"
       loop_control:
         label: "{{ item.Name }}"
@@ -137,7 +146,6 @@
     - name: Get WebApp snapshots
       ansible.builtin.command:
         cmd: "{{ openstack_bin }} workloadmgr workload snapshot list --workload_id {{ item.ID }} -f json"
-      environment: "{{ os_env }}"
       loop: "{{ app_workloads }}"
       loop_control:
         label: "{{ item.Name }}"
@@ -154,7 +162,6 @@
     - name: Delete WebApp snapshots
       ansible.builtin.command:
         cmd: "{{ openstack_bin }} workloadmgr workload snapshot delete {{ item.ID }}"
-      environment: "{{ os_env }}"
       loop: "{{ app_snapshots }}"
       loop_control:
         label: "{{ item.Name }} ({{ item.ID }})"
@@ -164,7 +171,6 @@
     - name: Wait for WebApp workload to return to available
       ansible.builtin.command:
         cmd: "{{ openstack_bin }} workloadmgr workload list -f json"
-      environment: "{{ os_env }}"
       register: app_status_poll
       until: >-
         ((app_status_poll.stdout or '[]') | from_json)
@@ -182,7 +188,6 @@
     - name: Delete WebApp workload
       ansible.builtin.command:
         cmd: "{{ openstack_bin }} workloadmgr workload delete {{ item.ID }}"
-      environment: "{{ os_env }}"
       loop: "{{ app_workloads }}"
       loop_control:
         label: "{{ item.Name }}"
@@ -204,7 +209,6 @@
     - name: Get Database snapshots
       ansible.builtin.command:
         cmd: "{{ openstack_bin }} workloadmgr workload snapshot list --workload_id {{ item.ID }} -f json"
-      environment: "{{ os_env }}"
       loop: "{{ pg_workloads }}"
       loop_control:
         label: "{{ item.Name }}"
@@ -221,7 +225,6 @@
     - name: Delete Database snapshots
       ansible.builtin.command:
         cmd: "{{ openstack_bin }} workloadmgr workload snapshot delete {{ item.ID }}"
-      environment: "{{ os_env }}"
       loop: "{{ pg_snapshots }}"
       loop_control:
         label: "{{ item.Name }} ({{ item.ID }})"
@@ -231,7 +234,6 @@
     - name: Wait for Database workload to return to available
       ansible.builtin.command:
         cmd: "{{ openstack_bin }} workloadmgr workload list -f json"
-      environment: "{{ os_env }}"
       register: pg_status_poll
       until: >-
         ((pg_status_poll.stdout or '[]') | from_json)
@@ -249,7 +251,6 @@
     - name: Delete Database workload
       ansible.builtin.command:
         cmd: "{{ openstack_bin }} workloadmgr workload delete {{ item.ID }}"
-      environment: "{{ os_env }}"
       loop: "{{ pg_workloads }}"
       loop_control:
         label: "{{ item.Name }}"
@@ -261,7 +262,6 @@
     - name: Show remaining workloads
       ansible.builtin.command:
         cmd: "{{ openstack_bin }} workloadmgr workload list -f json"
-      environment: "{{ os_env }}"
       register: final_workload_list
       changed_when: false
       tags: always

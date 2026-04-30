@@ -19,34 +19,43 @@
   vars:
     ansible_python_interpreter: "{{ lookup('env', 'VIRTUAL_ENV') }}/bin/python3"
     cloud_init_file: "{{ playbook_dir }}/../cloud-init-password.yaml"
-    openstack_bin: "{{ playbook_dir }}/../.venv/bin/openstack"
-    os_env:
-      OS_CLOUD: "{{ os_cloud }}"
-      OS_CLIENT_CONFIG_FILE: "{{ playbook_dir }}/../clouds.yaml"
-  environment:
-    OS_CLIENT_CONFIG_FILE: "{{ playbook_dir }}/../clouds.yaml"
+    # --insecure: required for workloadmgr against the self-signed RHOSO cert.
+    openstack_bin: "{{ playbook_dir }}/../.venv/bin/openstack --insecure"
   vars_files:
     - ../vars/main.yml
+    - ../vars/vault.yml
+  environment:
+    OS_AUTH_URL: "{{ os_auth_url }}"
+    OS_USERNAME: "{{ os_username }}"
+    OS_PASSWORD: "{{ vault_os_password }}"
+    OS_PROJECT_ID: "{{ os_project_id }}"
+    OS_PROJECT_NAME: "{{ os_project_name }}"
+    OS_USER_DOMAIN_NAME: "{{ os_user_domain_name }}"
+    OS_PROJECT_DOMAIN_NAME: "{{ os_project_domain_name }}"
+    OS_REGION_NAME: "{{ os_region_name }}"
+    OS_INTERFACE: "{{ os_interface }}"
+    OS_IDENTITY_API_VERSION: "3"
+  module_defaults:
+    group/openstack.cloud.openstack:
+      validate_certs: false
 
   tasks:
 
     # ── Phase 1: Prerequisite checks ──────────────────────────────────────────
     # Fail fast before creating anything if shared infra is missing.
 
-    - name: Check prod-network exists (project-scoped)
+    - name: "Check {{ prod_network }} exists (project-scoped)"
       openstack.cloud.networks_info:
-        cloud: "{{ os_cloud }}"
-        name: prod-network
+        name: "{{ prod_network }}"
         filters:
           project_id: "{{ os_project_id }}"
       register: _prod_net
       failed_when: _prod_net.networks | length == 0
       tags: always
 
-    - name: Check data-network exists (project-scoped)
+    - name: "Check {{ data_network }} exists (project-scoped)"
       openstack.cloud.networks_info:
-        cloud: "{{ os_cloud }}"
-        name: data-network
+        name: "{{ data_network }}"
         filters:
           project_id: "{{ os_project_id }}"
       register: _data_net
@@ -55,7 +64,6 @@
 
     - name: Check security group exists
       openstack.cloud.security_group_info:
-        cloud: "{{ os_cloud }}"
         name: "{{ demo_sg }}"
         project_id: "{{ os_project_id }}"
       register: _sg
@@ -64,7 +72,6 @@
 
     - name: Check keypair exists
       openstack.cloud.keypair_info:
-        cloud: "{{ os_cloud }}"
         name: "{{ demo_keypair }}"
       register: _kp
       failed_when: _kp.keypairs | length == 0
@@ -72,7 +79,6 @@
 
     - name: Check required flavors exist
       openstack.cloud.compute_flavor_info:
-        cloud: "{{ os_cloud }}"
         name: "{{ item }}"
       register: _flavor
       failed_when: _flavor.flavors | length == 0
@@ -82,7 +88,6 @@
 
     - name: Check cirros image exists
       openstack.cloud.image_info:
-        cloud: "{{ os_cloud }}"
         image: cirros
       register: _image
       failed_when: _image.images | length == 0
@@ -98,7 +103,6 @@
 
     - name: Create Firewall boot volume
       openstack.cloud.volume:
-        cloud: "{{ os_cloud }}"
         name: "{{ demo_prefix }}firewall-bootvol"
         size: 1
         image: cirros
@@ -108,7 +112,6 @@
 
     - name: Create Firewall data volume
       openstack.cloud.volume:
-        cloud: "{{ os_cloud }}"
         name: "{{ demo_prefix }}firewall-datavol"
         size: 4
         state: present
@@ -117,7 +120,6 @@
 
     - name: Create Firewall server
       openstack.cloud.server:
-        cloud: "{{ os_cloud }}"
         name: "{{ demo_prefix }}firewall-vm"
         boot_volume: "{{ demo_prefix }}firewall-bootvol"
         flavor: m1.tiny
@@ -140,7 +142,6 @@
 
     - name: Create WebApp boot volumes
       openstack.cloud.volume:
-        cloud: "{{ os_cloud }}"
         name: "{{ item }}"
         size: 1
         image: cirros
@@ -154,16 +155,14 @@
 
     - name: Create WebApp BE data volume
       openstack.cloud.volume:
-        cloud: "{{ os_cloud }}"
         name: "{{ demo_prefix }}webapp-be-datavol"
         size: 4
         state: present
         wait: true
       tags: app
 
-    - name: Create WebApp LB server (prod-network, floating IP)
+    - name: "Create WebApp LB server ({{ prod_network }}, floating IP)"
       openstack.cloud.server:
-        cloud: "{{ os_cloud }}"
         name: "{{ demo_prefix }}webapp-lb"
         boot_volume: "{{ demo_prefix }}webapp-lb-bootvol"
         flavor: m1.tiny
@@ -177,9 +176,8 @@
         wait: true
       tags: app
 
-    - name: Create WebApp FE server (prod-network + data-network, no floating IP)
+    - name: "Create WebApp FE server ({{ prod_network }} + {{ data_network }}, no floating IP)"
       openstack.cloud.server:
-        cloud: "{{ os_cloud }}"
         name: "{{ demo_prefix }}webapp-fe"
         boot_volume: "{{ demo_prefix }}webapp-fe-bootvol"
         flavor: m1.tiny
@@ -195,9 +193,8 @@
         wait: true
       tags: app
 
-    - name: Create WebApp BE server (data-network, no floating IP)
+    - name: "Create WebApp BE server ({{ data_network }}, no floating IP)"
       openstack.cloud.server:
-        cloud: "{{ os_cloud }}"
         name: "{{ demo_prefix }}webapp-be"
         boot_volume: "{{ demo_prefix }}webapp-be-bootvol"
         flavor: m1.tiny
@@ -222,7 +219,6 @@
 
     - name: Create Database Primary boot volume
       openstack.cloud.volume:
-        cloud: "{{ os_cloud }}"
         name: "{{ demo_prefix }}database-primary-bootvol"
         size: 1
         image: cirros
@@ -232,16 +228,14 @@
 
     - name: Create Database Primary data volume
       openstack.cloud.volume:
-        cloud: "{{ os_cloud }}"
         name: "{{ demo_prefix }}database-primary-datavol"
         size: 4
         state: present
         wait: true
       tags: pg
 
-    - name: Create Database Primary data port on data-network
+    - name: "Create Database Primary data port on {{ data_network }}"
       openstack.cloud.port:
-        cloud: "{{ os_cloud }}"
         name: "{{ demo_prefix }}database-primary-data-port"
         network: "{{ _data_net.networks[0].id }}"
         security_groups:
@@ -251,16 +245,14 @@
 
     - name: Look up Database Primary data port ID
       openstack.cloud.port_info:
-        cloud: "{{ os_cloud }}"
         filters:
           name: "{{ demo_prefix }}database-primary-data-port"
           project_id: "{{ os_project_id }}"
       register: _db_primary_port_info
       tags: pg
 
-    - name: Create Database Primary server (prod-network + data-network via port)
+    - name: "Create Database Primary server ({{ prod_network }} + {{ data_network }} via port)"
       openstack.cloud.server:
-        cloud: "{{ os_cloud }}"
         name: "{{ demo_prefix }}database-primary"
         boot_volume: "{{ demo_prefix }}database-primary-bootvol"
         flavor: m1.tiny
@@ -279,7 +271,7 @@
       when: _db_primary_port_info.ports | length > 0
       tags: pg
 
-    - name: Get Database Primary prod-network fixed IP
+    - name: "Get Database Primary {{ prod_network }} fixed IP"
       ansible.builtin.shell:
         cmd: >-
           {{ openstack_bin }} port list
@@ -288,7 +280,6 @@
           -f value -c "Fixed IP Addresses"
           | grep -oE '[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+'
           | head -1
-      environment: "{{ os_env }}"
       register: _db_primary_fixed_ip
       changed_when: false
       tags: pg
@@ -296,7 +287,6 @@
     - name: Find external network for floating IP allocation
       ansible.builtin.command:
         cmd: "{{ openstack_bin }} network list --external -f value -c ID"
-      environment: "{{ os_env }}"
       register: _ext_net_id
       changed_when: false
       tags: pg
@@ -307,25 +297,22 @@
           {{ openstack_bin }} floating ip create
           {{ _ext_net_id.stdout_lines[0] }}
           -f value -c floating_ip_address
-      environment: "{{ os_env }}"
       register: _db_fip
       when: _db_primary_fixed_ip.stdout | length > 0
       tags: pg
 
-    - name: Associate floating IP to Database Primary prod-network port
+    - name: "Associate floating IP to Database Primary {{ prod_network }} port"
       ansible.builtin.command:
         cmd: >-
           {{ openstack_bin }} server add floating ip
           --fixed-ip-address {{ _db_primary_fixed_ip.stdout | trim }}
           {{ demo_prefix }}database-primary
           {{ _db_fip.stdout | trim }}
-      environment: "{{ os_env }}"
       when: _db_fip is not skipped
       tags: pg
 
     - name: Create Database Replica boot volume
       openstack.cloud.volume:
-        cloud: "{{ os_cloud }}"
         name: "{{ demo_prefix }}database-replica-bootvol"
         size: 1
         image: cirros
@@ -335,16 +322,14 @@
 
     - name: Create Database Replica data volume
       openstack.cloud.volume:
-        cloud: "{{ os_cloud }}"
         name: "{{ demo_prefix }}database-replica-datavol"
         size: 4
         state: present
         wait: true
       tags: pg
 
-    - name: Create Database Replica server (data-network, no floating IP)
+    - name: "Create Database Replica server ({{ data_network }}, no floating IP)"
       openstack.cloud.server:
-        cloud: "{{ os_cloud }}"
         name: "{{ demo_prefix }}database-replica"
         boot_volume: "{{ demo_prefix }}database-replica-bootvol"
         flavor: m1.tiny
@@ -365,7 +350,6 @@
 
     - name: Collect server info for all demo VMs
       openstack.cloud.server_info:
-        cloud: "{{ os_cloud }}"
         server: "{{ item }}"
         filters:
           project_id: "{{ os_project_id }}"

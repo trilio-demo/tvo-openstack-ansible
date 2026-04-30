@@ -9,6 +9,7 @@ cp clouds.yaml.sample clouds.yaml
 cp secure.yaml.sample secure.yaml
 cp cloud-init-password.yaml.sample cloud-init-password.yaml
 cp vars/main.yml.sample vars/main.yml
+cp vars/vault.yml.sample vars/vault.yml
 ```
 
 | Sample file | Real file | What to populate |
@@ -17,6 +18,7 @@ cp vars/main.yml.sample vars/main.yml
 | `secure.yaml.sample` | `secure.yaml` | OpenStack password |
 | `cloud-init-password.yaml.sample` | `cloud-init-password.yaml` | Hashed Cirros console password — generate with `openssl passwd -6 <password>` |
 | `vars/main.yml.sample` | `vars/main.yml` | `os_project_id`, `os_project_name`, backup target type IDs |
+| `vars/vault.yml.sample` | `vars/vault.yml` | `vault_os_password` (OpenStack password used by playbooks via `OS_PASSWORD`) |
 
 ### 2. Create the keypair
 
@@ -82,8 +84,7 @@ They are **not** created or deleted by these playbooks.
 | External / provider network | Network | Source of floating IPs |
 | `vbsg-ssh` | Security group | Must allow SSH inbound; applied to all VMs |
 | `vincent-ansible-key` | Keypair | Injected into all VMs — see setup step 2 |
-| S3 backup target | Trilio backup target | Used by Firewall and Database workloads |
-| NFS backup target | Trilio backup target | Used by WebApp workload |
+| Default backup target | Trilio backup target | Used by all workloads (S3 ceph on RHOSO; this cluster has no NFS target) |
 | `cirros` | Image | Used for all demo VMs |
 | `m1.tiny` | Flavor | Used for all demo VMs |
 
@@ -127,9 +128,9 @@ Resource names are descriptive by default (e.g., `firewall-vm`, `webapp-lb`). Se
 
 | Demo | Workload Name | Instances | Backup Target | Snapshot Name |
 |------|---------------|-----------|---------------|---------------|
-| Firewall | `firewall-workload` | firewall-vm | S3 | `firewall-snapshot` |
-| WebApp | `webapp-workload` | webapp-lb + webapp-fe + webapp-be | NFS | `webapp-snapshot` |
-| Database | `database-workload` | database-primary + database-replica | S3 | `database-snapshot` |
+| Firewall | `firewall-workload` | firewall-vm | default (S3) | `firewall-snapshot` |
+| WebApp | `webapp-workload` | webapp-lb + webapp-fe + webapp-be | default (S3) | `webapp-snapshot` |
+| Database | `database-workload` | database-primary + database-replica | default (S3) | `database-snapshot` |
 
 ---
 
@@ -264,7 +265,9 @@ Tolerates missing workloads and snapshots.
 ├── cloud-init-password.yaml.sample
 ├── vars/
 │   ├── main.yml                      # gitignored — copy from main.yml.sample
-│   └── main.yml.sample
+│   ├── main.yml.sample
+│   ├── vault.yml                     # gitignored — copy from vault.yml.sample
+│   └── vault.yml.sample
 └── playbooks/
     ├── setup_tenant.yml
     ├── teardown_tenant.yml

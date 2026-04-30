@@ -1,0 +1,39 @@
+---
+# auth_test.yml
+# Validate Option-3 auth: OS_* env vars from vars/main.yml + vars/vault.yml.
+# Confirms we are talking to the RHOSO Keystone (not the stale OSP17 entry
+# in ~/.config/openstack/clouds.yaml) by printing the auth_url.
+
+- name: Auth test
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars:
+    ansible_python_interpreter: "{{ lookup('env', 'VIRTUAL_ENV') }}/bin/python3"
+  vars_files:
+    - ../vars/main.yml
+    - ../vars/vault.yml
+  environment:
+    OS_AUTH_URL: "{{ os_auth_url }}"
+    OS_USERNAME: "{{ os_username }}"
+    OS_PASSWORD: "{{ vault_os_password }}"
+    OS_PROJECT_ID: "{{ os_project_id }}"
+    OS_PROJECT_NAME: "{{ os_project_name }}"
+    OS_USER_DOMAIN_NAME: "{{ os_user_domain_name }}"
+    OS_PROJECT_DOMAIN_NAME: "{{ os_project_domain_name }}"
+    OS_REGION_NAME: "{{ os_region_name }}"
+    OS_INTERFACE: "{{ os_interface }}"
+    OS_IDENTITY_API_VERSION: "3"
+  module_defaults:
+    group/openstack.cloud.openstack:
+      validate_certs: false
+  tasks:
+    - name: List networks (verifies live RHOSO auth)
+      openstack.cloud.networks_info:
+      register: nets
+
+    - name: Show endpoint and project networks
+      ansible.builtin.debug:
+        msg:
+          - "auth_url in use: {{ os_auth_url }}"
+          - "networks visible: {{ nets.networks | map(attribute='name') | list }}"
