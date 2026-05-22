@@ -1,29 +1,47 @@
 ---
+# vars/main.yml.sample — template for per-cluster vars/main.yml
+# Copy to vars/main.yml and fill in cluster-specific values. The real
+# vars/main.yml is gitignored.
+#
+# Most values come from the cluster's openrc (see vars/openrc/<cluster>.sh
+# alongside this file). Password lives in vars/vault.yml as
+# vault_os_password.
+
 # ── OpenStack auth ────────────────────────────────────────────────────────────
-os_cloud: openstack                          # cloud name in clouds.yaml
-os_project_id: <your-project-uuid>           # openstack project show <name> -f value -c id
-os_project_name: <your-project-name>
+# These flow through each play's `environment:` block as OS_* env vars.
+# The playbooks consume _NAME forms of the domain vars; if your cluster's
+# openrc only supplies _ID, resolve once with:
+#   openstack --insecure domain show <id> -f value -c name
+os_auth_url: "<https://keystone-host:5000/v3>"
+os_username: "<username>"
+os_project_id: "<project-uuid>"
+os_project_name: "<project-name>"
+os_user_domain_name: "<user-domain-name>"
+os_project_domain_name: "<project-domain-name>"
+os_region_name: "<RegionOne-or-regionOne>"    # case-sensitive — copy verbatim
+os_interface: "public"
 
 # ── Resource naming ───────────────────────────────────────────────────────────
-# demo_prefix: prepended to all managed resources.  Default is empty —
-#   resources are named firewall-vm, webapp-lb, database-primary, etc.
-#   Set to e.g. "mylab-" (include trailing dash) to namespace them.
-# demo_prefix: ""
+# demo_prefix: prepended to all managed resources. Empty = bare names.
+demo_prefix: ""
+demo_keypair: "vincent-ansible-key"
+demo_sg: "vbsg-ssh"
 
-# demo_keypair: keypair injected into all VMs.  Independent of demo_prefix.
-# demo_keypair: my-keypair-name
-
-# demo_sg: security group applied to all VMs and ports.
-# demo_sg: my-security-group
+# ── Tenant networks (cluster-specific) ────────────────────────────────────────
+# Discover with:
+#   openstack --insecure network list --project $OS_PROJECT_ID
+# External (FIP) network is auto-discovered. No edit needed.
+prod_network: "<prod-network-name>"
+data_network: "<data-network-name>"
 
 # ── Trilio workload definitions ───────────────────────────────────────────────
-# instance_names: VM names as they exist in your OpenStack project.
+# backup_target_type is the NAME (or UUID) of an entry from:
+#   openstack --insecure workloadmgr backup target type list
+# (NOT `backup target list` — that's the storage endpoint; the type is a
+# named binding to it. The --backup-target-type CLI flag consumes the type.)
+# Run `playbooks/discover.yml` to enumerate everything for a new cluster.
 #
-# backup_target_type: the Type ID reported by:
-#   openstack workloadmgr backup target list
-# Set each workload to the appropriate S3 or NFS target type ID for your environment.
-#
-# demo_tag: used to run a single demo scenario:
+# demo_tag is used by --tags to run a single demo:
 #   ansible-playbook playbooks/setup_trilio.yml --tags fw
 
 trilio_workloads:
@@ -32,7 +50,7 @@ trilio_workloads:
     demo_tag: fw
     instance_names:
       - firewall-vm
-    backup_target_type: <s3-backup-target-type-id>
+    backup_target_type: "<S3-target-type-name-or-uuid>"
     snapshot_name: firewall-snapshot
 
   - name: webapp-workload
@@ -42,7 +60,7 @@ trilio_workloads:
       - webapp-lb
       - webapp-fe
       - webapp-be
-    backup_target_type: <nfs-backup-target-type-id>
+    backup_target_type: "<NFS-target-type-name-or-uuid>"
     snapshot_name: webapp-snapshot
 
   - name: database-workload
@@ -51,5 +69,5 @@ trilio_workloads:
     instance_names:
       - database-primary
       - database-replica
-    backup_target_type: <s3-backup-target-type-id>
+    backup_target_type: "<S3-target-type-name-or-uuid>"
     snapshot_name: database-snapshot

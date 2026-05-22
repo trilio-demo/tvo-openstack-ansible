@@ -1,0 +1,44 @@
+# Cluster openrc — sample template
+#
+# Copy this to vars/openrc/<cluster>.sh (e.g. canonical.sh, rhoso.sh) and
+# fill in the values from your cluster's openrc download. The real *.sh
+# files are gitignored; only *.sample is checked in.
+#
+# Purpose: reference asset for manual `openstack` CLI work during bringup
+# and debugging. NOT consumed by the playbooks at runtime — those read
+# vars/main.yml + vars/vault.yml.
+#
+# Usage:
+#   source vars/openrc/<cluster>.sh
+#   openstack --insecure <command>     # --insecure for self-signed clusters
+#
+# Permissions: chmod 600 the real .sh file after creating it. It does not
+# contain a baked-in password (prompts interactively), but limiting access
+# is still appropriate for an auth file.
+
+export OS_AUTH_URL=<https://keystone-host:5000/v3>
+export OS_PROJECT_ID=<project-uuid>
+export OS_PROJECT_NAME="<project-name>"
+export OS_USERNAME="<username>"
+
+# Domains. Clusters supply either NAME or ID (or both) for user / project
+# domain. Keep whichever your cluster's openrc provides — don't fabricate
+# the missing form. If the playbooks (which currently consume _NAME only)
+# don't get what they need, resolve via:
+#     openstack --insecure domain show <id> -f value -c name
+# and put the resolved name into vars/main.yml.
+export OS_USER_DOMAIN_NAME="<user-domain-name>"
+# export OS_USER_DOMAIN_ID="<user-domain-id>"
+# export OS_PROJECT_DOMAIN_NAME="<project-domain-name>"
+export OS_PROJECT_DOMAIN_ID="<project-domain-id>"
+
+# Region casing varies between clusters (RegionOne vs regionOne). Copy
+# verbatim from the cluster's openrc — case-sensitive.
+export OS_REGION_NAME="<RegionOne-or-regionOne>"
+
+export OS_INTERFACE=public
+export OS_IDENTITY_API_VERSION=3
+
+echo "Please enter your OpenStack Password for project $OS_PROJECT_NAME as user $OS_USERNAME: "
+read -sr OS_PASSWORD_INPUT
+export OS_PASSWORD=$OS_PASSWORD_INPUT

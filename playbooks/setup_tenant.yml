@@ -93,6 +93,36 @@
       failed_when: _image.images | length == 0
       tags: always
 
+    # Volume quota advisory. First-run setup uses ~20 volumes: 10 for the
+    # demo VMs (2 firewall + 4 webapp + 4 database) + Trilio snapshot
+    # ephemerals during initial backup. Re-runs are idempotent and reuse
+    # the existing resources, so headroom matters mostly on a fresh
+    # bringup. Non-fatal — operators can choose to proceed under tight
+    # quota if they know the resources already exist.
+    - name: Read project volume quota and usage
+      ansible.builtin.shell: "{{ openstack_bin }} limits show --absolute -f json"
+      register: _limits
+      changed_when: false
+      tags: always
+
+    - name: "Advisory: volume quota headroom"
+      vars:
+        # Field name varies by OpenStack version: snake_case on Canonical
+        # (max_total_volumes / total_volumes_used) vs older camelCase
+        # (maxTotalVolumes / totalVolumesUsed). Accept either.
+        _vol_max:  "{{ (_limits.stdout | from_json | selectattr('Name','in',['max_total_volumes','maxTotalVolumes'])  | map(attribute='Value') | first) | int }}"
+        _vol_used: "{{ (_limits.stdout | from_json | selectattr('Name','in',['total_volumes_used','totalVolumesUsed']) | map(attribute='Value') | first) | int }}"
+      ansible.builtin.debug:
+        msg: >-
+          Volume quota: {{ _vol_used }}/{{ _vol_max }} used,
+          {{ (_vol_max | int) - (_vol_used | int) }} free. A first-run
+          full bringup uses ~20 volumes (demo VMs + Trilio snapshot
+          ephemerals); re-runs reuse existing resources. Check your
+          quota before a fresh bringup —
+          `openstack quota set --volumes <N> {{ os_project_name }}`
+          to raise.
+      tags: always
+
     - name: Prerequisite checks passed
       ansible.builtin.debug:
         msg: "All prerequisite resources found. Proceeding with resource creation."

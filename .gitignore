@@ -2,6 +2,8 @@
 secure.yaml
 vars/vault.yml
 vars/main.yml
+vars/openrc/*.sh
+!vars/openrc/*.sh.sample
 clouds.yaml
 cloud-init-password.yaml
 *.password
@@ -22,3 +24,8 @@ OSP-Demos.code-workspace
 
 # OS
 .DS_Store
+
+# Editor backup files (e.g. vars/vault.yml~)
+*~
+*.swp
+*.swo

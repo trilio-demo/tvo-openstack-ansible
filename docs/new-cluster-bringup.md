@@ -16,20 +16,27 @@ How to adapt these playbooks to a new OpenStack cluster.
 **Branch:** `canonical` (created off `realistic-apps`)
 **Target clone path:** `~/Development/Lab/tvo-canonical/Demos`
 **Decision date:** 2026-05-22
-**Status:** Mid-bringup. Repo not yet cloned to the target path; CLAUDE.md
-in the new clone will need to be created from `CLAUDE.md.sample` and
-customized.
+**Status:** Auth chain validated end-to-end against Canonical Keystone
+on 2026-05-22. `vars/main.yml` fully populated except `backup_target_type`
+IDs (one per workload). Remaining work: verify pre-existing project
+resources (keypair, SG, image, default backup target), discover
+backup_target_type IDs, then end-to-end validation of
+`setup_tenant.yml` → `setup_trilio.yml` → teardown → rebuild for
+idempotency.
 
 ### Reference material captured
 
-- openrc: `collateral/tvo-canonical-vince-demo-openrc.sh`
+- openrc: `vars/openrc/canonical.sh` (gitignored, in-repo). Originally
+  sourced from `~/Development/Lab/tvo-canonical/RC/vince-demo-openrc.sh`,
+  but per repo self-containment rule the canonical copy lives in-repo.
 - Keystone: `https://172.22.12.33:5000/v3` (self-signed, IP — keep
   `validate_certs: false` + `--insecure`)
 - Project: `vince-demo` / `870e66a32c564ed1be66006c1ee5906d`
 - User: `vince`
 - User domain: `admin_domain` (not `Default`)
-- Project domain: `OS_PROJECT_DOMAIN_ID=9291da41e5394e9a89b0ab74e63d6f13`
-  — needs `openstack domain show` to resolve to a name
+- Project domain: openrc supplies `OS_PROJECT_DOMAIN_ID=9291da41e5394e9a89b0ab74e63d6f13`.
+  Working assumption: name is also `admin_domain` (Horizon login domain).
+  Verify with `openstack --insecure domain show 9291da41e5394e9a89b0ab74e63d6f13 -f value -c name`.
 - Region: `RegionOne` (note casing — RHOSO was `regionOne`)
 
 ### Checklist
@@ -37,25 +44,58 @@ customized.
 - [x] Decision: clone-per-cluster + fresh `uv` venv per clone
 - [x] `docs/new-cluster-bringup.md` written (this file)
 - [x] `CLAUDE.md.sample` template added so new clones can `cp` it on day one
-- [ ] Branch `canonical` created off `realistic-apps` and pushed
-- [ ] Repo cloned into `~/Development/Lab/tvo-canonical/Demos`
-- [ ] `CLAUDE.md` in new clone created from `CLAUDE.md.sample` and edited
+- [x] Branch `canonical` created off `realistic-apps` and pushed
+- [x] Repo cloned into `~/Development/Lab/tvo-canonical/Demos`
+- [x] `CLAUDE.md` in new clone created from `CLAUDE.md.sample` and edited
       for Canonical (Environment section, Session State)
-- [ ] Fresh `uv venv` created with ansible-core + openstack.cloud collection
-- [ ] `vars/main.yml` created from sample, updated for Canonical auth,
-      region, domains
-- [ ] `vars/vault.yml` created from sample, populated with Canonical
-      password for user `vince`
-- [ ] Domain ID `9291da41…` resolved to a domain name (or
-      `OS_PROJECT_DOMAIN_ID` plumbed through every play)
-- [ ] Tenant network names looked up + written into `vars/main.yml`
-- [ ] Prereqs verified in project: keypair `vincent-ansible-key`, SG
-      `vbsg-ssh`, boot image, default backup target
-- [ ] `playbooks/auth_test.yml` passed against Canonical
-- [ ] `setup_tenant.yml` + `setup_trilio.yml` validated end-to-end
-- [ ] Teardown + rebuild validated (idempotency)
-- [ ] CLAUDE.md Session State updated: bringup complete YYYY-MM-DD
-- [ ] Project memory updated to record Canonical bringup completed
+- [x] Fresh `uv venv` created with ansible-core + openstack.cloud collection
+      (+ `workloadmgrclient` 6.1.1.11 from Trilio's Gemfury index;
+      `pytz` + `docutils` installed manually as undeclared transitive deps)
+- [x] Openrc imported into repo as `vars/openrc/canonical.sh` (gitignored,
+      mode 0600); sanitized template added at `vars/openrc/canonical.sh.sample`;
+      `.gitignore` updated to exclude `vars/openrc/*.sh` and allow `.sh.sample`
+- [x] `vars/main.yml` created from sample, updated for Canonical auth,
+      region, domains (network names + backup_target_type IDs still `<TBD>`)
+- [x] `vars/main.yml.sample` rewritten to OS_* shape (was stale —
+      pre-`7dd9aad` migration template)
+- [x] `vars/vault.yml` populated with Canonical password for user `vince`
+- [x] `cloud-init-password.yaml` created from sample, hashed cirros console
+      password populated (used by `setup_tenant.yml` as VM userdata —
+      surfaced when first VM-create task ran)
+- [x] Project domain name verified — `admin_domain` (assumption from
+      Horizon login domain was correct; confirmed implicitly by auth_test
+      passing with that value)
+- [x] Tenant network names: `prod_network: prod-network`,
+      `data_network: data-network` (`data-network` added mid-bringup
+      after `setup_tenant.yml`'s project-scope check rejected the
+      shared `private-network`; `public-network` is the external/FIP
+      network, auto-discovered by plays)
+- [x] `ansible.cfg` cleaned: removed dangling `inventory =` directive
+      (no playbooks use a host inventory; all use `hosts: localhost`)
+- [x] Prereqs verified in project via `playbooks/discover.yml`:
+      keypair `vincent-ansible-key`, SG `vbsg-ssh`, boot images
+      (Ubuntu 20.04, cirros, Trilio-FRM-Ubuntu-24.04), backup targets
+      (NFS default + S3), backup-target-types (`NFS_LAB_CANONICAL`
+      default, `S3_LAB`)
+- [x] `backup_target_type` wired in `vars/main.yml`: firewall=`S3_LAB`,
+      webapp=`NFS_LAB_CANONICAL`, database=`S3_LAB` (mirrors original
+      demo intent of exercising both target types)
+- [x] `playbooks/auth_test.yml` passed against Canonical (2026-05-22)
+- [x] `ansible.cfg` warnings squelched: `localhost_warning=False` (in
+      `[defaults]`) + `inventory_unparsed_warning=False` (in `[inventory]`)
+- [x] Volume quota advisory added to `setup_tenant.yml` Phase 1
+      (non-fatal debug message; advises ~20 free volumes for first run)
+- [x] `setup_tenant.yml` + `setup_trilio.yml` validated end-to-end
+      against Canonical (2026-05-22): all VMs/volumes provisioned, all
+      three Trilio workloads created with their initial snapshots
+      completing successfully
+- [ ] Teardown + rebuild validated (idempotency) — **deferred**
+      (session-end decision 2026-05-22). Setup flow validated end-to-end,
+      but the full teardown→rebuild cycle was not run. Will surface if
+      a future session needs to rebuild the demo from scratch.
+- [x] CLAUDE.md Session State updated: bringup complete 2026-05-22
+- [x] Project memory updated to record Canonical bringup completed
+      (see [[project-canonical-bringup]])
 
 Mark each box `[x]` as you go. When all boxes are checked, move this
 section down to **History of bringups** at the bottom with a one-line
@@ -121,20 +161,55 @@ collection, and the openstack + workloadmgr clients.
 ```bash
 uv venv
 source .venv/bin/activate
-uv pip install 'ansible-core>=2.16' openstacksdk python-openstackclient workloadmgrclient
+
+# Standard packages (public PyPI).
+uv pip install 'ansible-core>=2.16' openstacksdk python-openstackclient
+
+# Trilio's workloadmgrclient is NOT on public PyPI — it lives on a private
+# Gemfury index, one per Trilio release line (trilio-6-1, trilio-6-2, ...).
+# Match the index to the cluster's installed Trilio release. For Trilio 6.1.x:
+uv pip install --extra-index-url https://pypi.fury.io/trilio-6-1 \
+  workloadmgrclient --no-cache-dir
+
+# workloadmgrclient has undeclared transitive deps. Install them too,
+# or `workloadmgr --help` fails with ModuleNotFoundError and
+# `openstack workloadmgr` floods "Could not load" warnings:
+uv pip install pytz docutils
+
 ansible-galaxy collection install openstack.cloud
 ```
+
+If the index returns 403, the URL may need a token:
+`https://<token>@pypi.fury.io/trilio-6-1`. The `trilio-6-1` index is
+publicly readable as of 2026-05-22.
 
 Sanity:
 ```bash
 ansible --version
 openstack --version
-openstack workloadmgr --help | head -5
+openstack workloadmgr --help | head -5   # no "Could not load" lines
+workloadmgr --help | head -3              # exits cleanly, no traceback
 ```
 
-### 3. Auth — find these on the new cluster
+### 3. Auth — import the cluster's openrc into the repo
 
-Source the new cluster's openrc, or read it. Capture:
+The repo is self-contained: per-cluster openrcs live **inside** the repo
+under `vars/openrc/`, not in some parent directory. Download the openrc
+from the cluster (Horizon → API Access → Download OpenStack RC File) and
+import:
+
+```bash
+cp /path/to/<cluster>-openrc.sh vars/openrc/<cluster>.sh
+chmod 600 vars/openrc/<cluster>.sh
+```
+
+`vars/openrc/*.sh` is gitignored; `vars/openrc/*.sh.sample` is the only
+checked-in artifact (a generic template). The openrc is NOT consumed by
+the playbooks at runtime — it's a reference asset for manual CLI work
+during bringup and debugging, and the source we copy auth values from
+into `vars/main.yml` below.
+
+Capture these OS_* values from your imported openrc:
 
 | Field | Where it lives | RHOSO example | Canonical example |
 |---|---|---|---|
@@ -145,10 +220,19 @@ Source the new cluster's openrc, or read it. Capture:
 | `OS_PROJECT_DOMAIN_NAME` | openrc / `openstack domain show <id>` | `Default` | resolve from `_ID` |
 | `OS_REGION_NAME` | openrc | `regionOne` | `RegionOne` |
 
-**Gotcha:** Some clouds set `OS_PROJECT_DOMAIN_ID` in the openrc instead of
-`_NAME`. Resolve to a name with `openstack domain show <id> -f value -c name`,
-or add `OS_PROJECT_DOMAIN_ID` to every play's `environment:` block (and drop
-`OS_PROJECT_DOMAIN_NAME`).
+**Gotcha:** Some clouds (e.g. Canonical) set `OS_PROJECT_DOMAIN_ID` in the
+openrc instead of `_NAME`. Current play templates consume `_NAME`, so
+resolve once:
+
+```bash
+source vars/openrc/<cluster>.sh
+openstack --insecure domain show <id> -f value -c name
+```
+
+A deferred follow-up (not in any bringup — its own change) is to make
+plays accept either `_NAME` or `_ID` so this lookup isn't needed. Until
+then, do the lookup. Don't edit play `environment:` blocks during a
+bringup — that risks regressing the `7dd9aad` osp17→RHOSO auth refactor.
 
 **Gotcha:** Region casing varies (`regionOne` vs `RegionOne`). Copy from
 openrc verbatim.
@@ -178,6 +262,21 @@ cp vars/vault.yml.sample vars/vault.yml
 `vars/vault.yml` is gitignored — never commit. (If you encrypt it with
 `ansible-vault`, that's still the same file path, just encrypted.)
 
+### 5b. Create `cloud-init-password.yaml`
+
+`setup_tenant.yml` injects a cirros console password into VMs via
+cloud-init userdata. The hash-only file is gitignored; `.sample` template
+shows the shape.
+
+```bash
+read -sp 'Choose Cirros console password: ' P; echo
+HASH=$(openssl passwd -6 "$P"); unset P
+sed "s|<hashed-password>|$HASH|" cloud-init-password.yaml.sample > cloud-init-password.yaml
+```
+
+Pipes the plaintext into `openssl passwd -6` (sha512-crypt) and writes
+only the hash into the file. The plaintext never enters shell history.
+
 ### 6. Network names
 
 `prod_network` / `data_network` in `vars/main.yml` must match real networks
@@ -194,17 +293,40 @@ exact names (case-sensitive!) into `vars/main.yml`.
 ### 7. Pre-existing project infrastructure
 
 These resources are **assumed to exist** in the project before any play runs.
-They are not created by these playbooks. Verify and create if missing:
+They are not created by these playbooks. Run:
 
-| Resource | Default name | How to verify |
+```bash
+ansible-playbook playbooks/discover.yml
+```
+
+It prints the project's keypairs, security groups, images, backup targets,
+and **backup-target-types** (the latter is what `backup_target_type` in
+`vars/main.yml` references — a separate entity from `backup target list`).
+
+Verify the project contains:
+
+| Resource | Default name | What `discover.yml` shows |
 |---|---|---|
-| Keypair | `vincent-ansible-key` | `openstack keypair list` |
-| Security group | `vbsg-ssh` | `openstack security group list --project $OS_PROJECT_ID` |
-| Boot image | (referenced in `setup_tenant.yml` tasks) | `openstack image list` |
-| Trilio default backup target | one with `Is_Default=true` | `openstack --insecure workloadmgr backup-target list` |
+| Keypair | `vincent-ansible-key` | `=== KEYPAIRS ===` block |
+| Security group | `vbsg-ssh` | `=== SECURITY GROUPS ===` block |
+| Boot image | (referenced in `setup_tenant.yml`) | `=== IMAGES ===` block |
+| Trilio default backup target | one with `Is_Default=true` | `=== BACKUP TARGETS ===` block |
+| Trilio backup-target-type | for each workload's `backup_target_type` | `=== BACKUP TARGET TYPES ===` block |
 
-If the keypair name differs per cluster, change `demo_keypair` in
-`vars/main.yml`. Same for `demo_sg`.
+Also check the project's **volume quota**. A first-run full bringup
+uses ~20 volumes (10 demo VMs + Trilio snapshot ephemerals during
+initial backup); re-runs reuse existing resources. `setup_tenant.yml`
+Phase 1 prints an **advisory** (non-fatal) with current quota state.
+Set quota up-front if tight:
+
+```bash
+openstack --insecure quota show <project>           # check current
+openstack --insecure quota set --volumes <N> <project>
+```
+
+Create any missing resources via Horizon or `openstack` CLI before
+running setup plays. If a name differs per cluster (e.g. cluster-specific
+target-type naming), update the relevant var in `vars/main.yml`.
 
 ### 8. Cert handling
 
@@ -262,4 +384,4 @@ Then teardown, then redo. Confirm idempotency on the rebuild.
 | Date | Cluster | Branch | Notes |
 |---|---|---|---|
 | 2026-04-30 | RHOSO (presales) | `realistic-apps` | First cluster on the OS_* env-var auth pattern. Migrated from RHOSP 17 in same branch. |
-| 2026-05-22 | Canonical (TVO) | `canonical` | First multi-clone bringup. New conventions: clone-per-cluster, fresh `uv` venv. |
+| 2026-05-22 | Canonical (TVO) | `canonical` | First multi-clone bringup. New conventions: clone-per-cluster, fresh `uv` venv, **openrc imported into repo** (`vars/openrc/`, gitignored + `.sample`), **`playbooks/discover.yml`** added as reusable prereq enumerator, **volume-quota advisory** in `setup_tenant.yml` Phase 1, `vars/main.yml.sample` rewritten to current OS_* shape. Teardown/rebuild idempotency cycle deferred. |

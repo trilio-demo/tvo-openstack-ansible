@@ -1,0 +1,80 @@
+---
+# discover.yml
+# Lists the project resources the bringup depends on:
+#   - keypair (demo_keypair)
+#   - security group (demo_sg)
+#   - boot images
+#   - Trilio backup targets (for filling backup_target_type in vars/main.yml)
+#
+# Run after auth_test.yml passes. Read-only; safe to re-run.
+
+- name: Discover project prereqs and Trilio backup targets
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars:
+    ansible_python_interpreter: "{{ lookup('env', 'VIRTUAL_ENV') }}/bin/python3"
+    openstack_bin: "{{ playbook_dir }}/../.venv/bin/openstack --insecure"
+  vars_files:
+    - ../vars/main.yml
+    - ../vars/vault.yml
+  environment:
+    OS_AUTH_URL: "{{ os_auth_url }}"
+    OS_USERNAME: "{{ os_username }}"
+    OS_PASSWORD: "{{ vault_os_password }}"
+    OS_PROJECT_ID: "{{ os_project_id }}"
+    OS_PROJECT_NAME: "{{ os_project_name }}"
+    OS_USER_DOMAIN_NAME: "{{ os_user_domain_name }}"
+    OS_PROJECT_DOMAIN_NAME: "{{ os_project_domain_name }}"
+    OS_REGION_NAME: "{{ os_region_name }}"
+    OS_INTERFACE: "{{ os_interface }}"
+    OS_IDENTITY_API_VERSION: "3"
+  tasks:
+    - name: List keypairs
+      shell: "{{ openstack_bin }} keypair list"
+      register: kp
+      changed_when: false
+
+    - name: List security groups in this project
+      shell: "{{ openstack_bin }} security group list --project {{ os_project_id }}"
+      register: sg
+      changed_when: false
+
+    - name: List images
+      shell: "{{ openstack_bin }} image list"
+      register: img
+      changed_when: false
+
+    - name: List Trilio backup targets
+      shell: "{{ openstack_bin }} workloadmgr backup target list"
+      register: bt
+      changed_when: false
+
+    - name: List Trilio backup-target-types (this is what backup_target_type in vars/main.yml refers to)
+      shell: "{{ openstack_bin }} workloadmgr backup target type list"
+      register: btt
+      changed_when: false
+
+    - name: Show discovery results
+      debug:
+        msg: |
+          === KEYPAIRS ===
+          {{ kp.stdout }}
+
+          === SECURITY GROUPS (project {{ os_project_name }}) ===
+          {{ sg.stdout }}
+
+          === IMAGES ===
+          {{ img.stdout }}
+
+          === BACKUP TARGETS (storage endpoints) ===
+          {{ bt.stdout }}
+
+          === BACKUP TARGET TYPES (what backup_target_type in vars/main.yml maps to) ===
+          {{ btt.stdout }}
+
+          Expected:
+            keypair         = {{ demo_keypair }}
+            security group  = {{ demo_sg }}
+            image           = a boot image referenced by setup_tenant.yml
+            backup target   = at least one with Is_Default=true
