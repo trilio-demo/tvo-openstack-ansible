@@ -1,0 +1,170 @@
+# CLAUDE.md — Trilio Demo Environment
+
+> **This is the sample/template.** On a fresh clone:
+> `cp CLAUDE.md.sample CLAUDE.md` and customize the **Environment** and
+> **Session State** sections below for the cluster this clone targets.
+> The real `CLAUDE.md` is gitignored so each clone keeps its own.
+
+## Session Continuity
+
+This user closes VSCode and CC CLI frequently and **never rejoins sessions**. Every new
+conversation starts cold. When you detect a session-end signal, sync memory before
+responding with a farewell.
+
+**Session-end phrases:** "that's it for the day", "good session, nite", "stopping point",
+or any clear sign-off.
+
+**What to sync:** update `project_trilio_demos.md` with playbook status, pending tasks,
+and any new decisions or findings from the session. If this is a per-cluster clone,
+also update the Session State section at the bottom of this file.
+
+---
+
+## Project Purpose
+
+Ansible playbooks to build, teardown, and rebuild a Trilio-for-OpenStack demo
+environment on the OpenStack cluster identified below. Replaces ad-hoc bash scripts.
+See [REQUIREMENTS.md](REQUIREMENTS.md).
+
+**Multi-cluster pattern:** one clone per cluster. See
+[docs/new-cluster-bringup.md](docs/new-cluster-bringup.md) for the bringup playbook.
+
+---
+
+## Environment
+
+> **CUSTOMIZE THIS TABLE** for the cluster this clone targets.
+
+| Item | Value |
+|------|-------|
+| Cluster | <e.g. RHOSO presales / Canonical TVO / …> |
+| Keystone | <OS_AUTH_URL> |
+| Release | <RHOSO / Canonical / RHOSP 17 / …> |
+| Project | `<name>` (`<id>`) |
+| Auth | OS_* env vars from `vars/main.yml` + `vars/vault.yml`. `validate_certs: false` if self-signed. See [docs/auth-design.md](docs/auth-design.md). |
+| Trilio version | <e.g. 6.1.1.4> |
+| Backup targets | <e.g. S3 only (`…/bucket1`, default), or S3 + NFS, etc.> |
+| Networks | `<prod-net-name>`, `<data-net-name>`, `<external-net-name>` |
+
+---
+
+## Playbook Priority Order
+
+```
+setup_trilio.yml       ↔  teardown_trilio.yml
+setup_tenant.yml       ↔  teardown_tenant.yml
+```
+
+**`setup_tenant.yml`** — create all demo OpenStack resources (VMs, volumes, ports)
+
+**`teardown_tenant.yml`** — delete demo VMs, volumes, ports
+
+**`setup_trilio.yml`** — create Trilio workloads + initial snapshots against running VMs
+
+**`teardown_trilio.yml`** — delete workloads + snapshots (supports per-demo `--tags`)
+
+---
+
+## Critical Constraints
+
+- **Never hardcode UUIDs.** Always look up by name + `project: "{{ os_project_id }}"`.
+
+- **Network names are environment-specific.** Defined in `vars/main.yml` as
+  `prod_network` / `data_network`. The external (floating-IP) network is discovered
+  dynamically via `openstack network list --external`.
+
+- **Do not use `trilio.tiny`.** Defined with 10G disk (wrong spec). Use `m1.tiny`
+  (default) or `trilio.small`.
+
+- **Teardown scope is demo resources only.** Stale resources (`vbst_*`, `vince-*`,
+  `demo-*`) are left alone. Never delete shared infra (networks, security groups,
+  keypairs, images, backup targets).
+
+- **Trilio API via CLI.** No Ansible collection for OpenStack TrilioVault.
+  Use `openstack workloadmgr` CLI commands (workloadmgrclient pip package).
+
+- **`workloadmgr` ignores `verify: false` in clouds.yaml.** For self-signed clouds,
+  `--insecure` must be passed on every workloadmgr invocation. Playbooks bake it
+  into `openstack_bin` so every shell call gets it.
+
+- **Dual-NIC servers cannot use `auto_ip` or `openstack.cloud.floating_ip`.**
+  Both fail with "No port matching NAT destination network". Assign floating IPs
+  via CLI: `openstack server add floating ip --fixed-ip-address <ip> <server> <fip>`.
+
+- **`workloadmgr workload show -f json` returns empty stdout.** Use
+  `workload list -f json` + `selectattr` filter for status polling instead.
+
+- **Volume mounting is manual.** Cirros cloud-init too limited. `os-mount-datavol.sh`
+  is scp'd in and run by hand.
+
+---
+
+## Resource Naming
+
+`demo_prefix` in `vars/main.yml` defaults to `""`. Set to e.g. `"vincent-"` to
+namespace. Names below show the default (no prefix).
+
+| Demo | VMs | Volumes | Port |
+|------|-----|---------|------|
+| Firewall | `firewall-vm` | `firewall-bootvol` (1G), `firewall-datavol` (4G) | — |
+| WebApp | `webapp-lb`, `webapp-fe` (dual-NIC), `webapp-be` | `webapp-{lb,fe,be}-bootvol` (1G), `webapp-be-datavol` (4G) | — |
+| Database | `database-primary` (dual-NIC, FIP post-create), `database-replica` | `database-{primary,replica}-bootvol` (1G), `database-{primary,replica}-datavol` (4G) | `database-primary-data-port` |
+
+| Resource | Name |
+|----------|------|
+| Workloads | `firewall-workload`, `webapp-workload`, `database-workload` |
+| Snapshots | `firewall-snapshot`, `webapp-snapshot`, `database-snapshot` |
+| Keypair | `vincent-ansible-key` (independent of `demo_prefix`) |
+
+---
+
+## Ansible Conventions
+
+- Use `openstack.cloud` collection (not legacy `os_*` modules)
+- **Never** pass `cloud:` to openstack.cloud tasks — auth flows through play-level
+  `environment:` block setting `OS_AUTH_URL`, `OS_USERNAME`, `OS_PASSWORD`, etc.
+  See [docs/auth-design.md](docs/auth-design.md) for the full rationale.
+- Always pass `project: "{{ os_project_id }}"` (or filter by it) on OpenStack lookups
+- `vars/main.yml` — cluster-specific non-secret vars (auth_url, username, domains,
+  project, workload defs)
+- `vars/vault.yml` — `vault_os_password` (gitignored; encrypt with ansible-vault when
+  ready)
+- Trilio CLI: `openstack workloadmgr` commands via workloadmgrclient pip package
+- Teardown: use `failed_when: false` on delete tasks; tolerate missing resources
+- Wait loops: `retries` + `delay` on info tasks; not `pause`
+- CLI flag: `--workload_id` (underscore, not hyphen)
+
+---
+
+## Running the Playbooks
+
+```bash
+# Activate venv (run from Demos/ directory)
+source .venv/bin/activate
+
+# Full teardown + rebuild
+ansible-playbook playbooks/teardown_trilio.yml
+ansible-playbook playbooks/teardown_tenant.yml
+ansible-playbook playbooks/setup_tenant.yml
+ansible-playbook playbooks/setup_trilio.yml
+
+# Single demo (e.g., Firewall)
+ansible-playbook playbooks/teardown_trilio.yml --tags fw
+ansible-playbook playbooks/teardown_tenant.yml --tags fw
+ansible-playbook playbooks/setup_tenant.yml    --tags fw
+ansible-playbook playbooks/setup_trilio.yml    --tags fw
+```
+
+---
+
+## Session State
+
+> **CUSTOMIZE** when this clone is created. Replace this block with current state.
+
+**This clone targets:** <cluster name>
+**Branch:** <branch>
+**Bringup status:** see [docs/new-cluster-bringup.md](docs/new-cluster-bringup.md)
+"Current bringup in progress" section.
+
+When picking up a new session in this clone, read the bringup checklist first
+to see what step is next.
