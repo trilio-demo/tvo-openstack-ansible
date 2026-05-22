@@ -121,9 +121,24 @@ collection, and the openstack + workloadmgr clients.
 ```bash
 uv venv
 source .venv/bin/activate
-uv pip install 'ansible-core>=2.16' openstacksdk python-openstackclient workloadmgrclient
+
+# Public PyPI: ansible + openstack tooling
+uv pip install 'ansible-core>=2.16' openstacksdk python-openstackclient
+
+# Private Trilio Gemfury index: workloadmgrclient (NOT on public PyPI)
+uv pip install --extra-index-url https://pypi.fury.io/trilio-6-1 \
+    workloadmgrclient --no-cache-dir
+
 ansible-galaxy collection install openstack.cloud
 ```
+
+> **Trilio index URL is version-pinned.** `pypi.fury.io/trilio-6-1` serves
+> the 6.1.x client (OSP17 + RHOSO use this). For a different Trilio
+> release on the new cluster — e.g., 6.2.x — the index will likely be
+> `pypi.fury.io/trilio-6-2` or similar. Confirm the cluster's Trilio
+> version (`openstack --insecure workloadmgr workload-type list` or the
+> Trilio appliance UI) and adjust the URL before installing. The bare
+> package name `workloadmgrclient` is the same across releases.
 
 Sanity:
 ```bash
