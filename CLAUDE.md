@@ -186,6 +186,3 @@ because they're full of customer-identifying cluster internals:
 
 If `CLAUDE.local.md` is missing (e.g. a fresh clone), there's no Session State
 to read — treat it as a new bringup and see `docs/new-cluster-bringup.md`.
-
-Full archaeology: `docs/session-state.md` — consult when prior-thread depth,
-decision reasoning, or ruled-out paths are needed.
