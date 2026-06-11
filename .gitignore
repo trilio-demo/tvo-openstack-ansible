@@ -13,8 +13,14 @@ cloud-init-password.yaml
 collateral/
 framework/
 inventory/
-CLAUDE.md
 OSP-Demos.code-workspace
+
+# Per-clone, customer-identifying local context (auth IDs, investigations,
+# Session State) — auto-loaded by Claude Code at cold start, never committed
+CLAUDE.local.md
+
+# Ad-hoc notes, writeups, transient session artifacts — never commit
+notes/
 
 # Python venv
 .venv/
