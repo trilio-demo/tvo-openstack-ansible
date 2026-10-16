@@ -13,6 +13,7 @@ framework/
 inventory/
 CLAUDE.md
 OSP-Demos.code-workspace
+local-only/
 
 # Python venv
 .venv/
@@ -22,3 +23,6 @@ OSP-Demos.code-workspace
 
 # OS
 .DS_Store
+
+# Atlas overview (internal)
+.atlas/
